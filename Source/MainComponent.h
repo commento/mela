@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "Audio/LoopEngine.h"
+#include "UI/EffectPanel.h"
 #include "UI/WaveformEditor.h"
 
 class MainComponent final : public juce::Component,
@@ -15,17 +16,31 @@ public:
     void resized() override;
 
 private:
+    enum class Page
+    {
+        loop,
+        effects
+    };
+
     void chooseFile();
     void timerCallback() override;
+    void updateEnvelope();
+    void updateEffects();
+    void showPage(Page pageToShow);
 
     juce::AudioDeviceManager deviceManager;
     LoopEngine engine;
+    Page currentPage = Page::loop;
+
     WaveformEditor waveform;
     juce::TextButton loadButton { "CARICA LOOP" };
     juce::TextButton playButton { "PLAY" };
     juce::TextButton stopButton { "STOP" };
+    juce::TextButton loopPageButton { "LOOP" };
+    juce::TextButton effectsPageButton { "FX" };
     juce::ToggleButton loopButton { "RIPETI LOOP" };
     juce::ToggleButton envelopeCycleButton { "ADSR CICLICO" };
+
     juce::Slider speedSlider;
     juce::Slider gainSlider;
     juce::Slider attackSlider;
@@ -40,9 +55,14 @@ private:
     juce::Label releaseLabel;
     juce::Label clipName;
     juce::Label statusLabel;
-    std::unique_ptr<juce::FileChooser> fileChooser;
 
-    void updateEnvelope();
+    EffectPanel distortionPanel;
+    EffectPanel flangerPanel;
+    EffectPanel chorusPanel;
+    EffectPanel delayPanel;
+    EffectPanel reverbPanel;
+
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

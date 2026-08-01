@@ -92,6 +92,32 @@ void LoopEngine::setEnvelopeCycle(bool shouldRepeat)
     envelopeCycle.store(shouldRepeat);
 }
 
+void LoopEngine::setDistortion(bool enabled, float drive, float toneHz, float mix)
+{
+    effectsChain.setDistortion(enabled, drive, toneHz, mix);
+}
+
+void LoopEngine::setFlanger(bool enabled, float rateHz, float depth,
+                            float feedback, float mix)
+{
+    effectsChain.setFlanger(enabled, rateHz, depth, feedback, mix);
+}
+
+void LoopEngine::setChorus(bool enabled, float rateHz, float depth, float mix)
+{
+    effectsChain.setChorus(enabled, rateHz, depth, mix);
+}
+
+void LoopEngine::setDelay(bool enabled, float timeMs, float feedback, float mix)
+{
+    effectsChain.setDelay(enabled, timeMs, feedback, mix);
+}
+
+void LoopEngine::setReverb(bool enabled, float size, float damping, float mix)
+{
+    effectsChain.setReverb(enabled, size, damping, mix);
+}
+
 bool LoopEngine::hasClip() const
 {
     return std::atomic_load(&clip) != nullptr;
@@ -130,17 +156,30 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const*,
             juce::FloatVectorOperations::clear(outputChannelData[channel], numSamples);
 
     render(outputChannelData, numOutputChannels, numSamples);
+
+    if (numOutputChannels > 0)
+    {
+        juce::AudioBuffer<float> outputBuffer(outputChannelData, numOutputChannels, numSamples);
+        effectsChain.process(outputBuffer);
+    }
 }
 
 void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
     deviceSampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
+    if (device != nullptr)
+    {
+        effectsChain.prepare(deviceSampleRate,
+                             device->getCurrentBufferSizeSamples(),
+                             juce::jmax(1, device->getActiveOutputChannels().countNumberOfSetBits()));
+    }
     stop();
 }
 
 void LoopEngine::audioDeviceStopped()
 {
     stop();
+    effectsChain.reset();
 }
 
 void LoopEngine::createWaveformOverview(Clip& target)

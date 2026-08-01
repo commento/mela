@@ -1,0 +1,218 @@
+#include "EffectsChain.h"
+
+#include <cmath>
+
+void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int channels)
+{
+    sampleRate = juce::jmax(1.0, newSampleRate);
+    preparedChannels = juce::jlimit(1, 2, channels);
+
+    const juce::dsp::ProcessSpec spec {
+        sampleRate,
+        static_cast<juce::uint32>(juce::jmax(1, maximumBlockSize)),
+        static_cast<juce::uint32>(preparedChannels)
+    };
+    chorus.prepare(spec);
+    reverb.prepare(spec);
+
+    flangerBuffer.setSize(preparedChannels,
+                          static_cast<int>(std::ceil(sampleRate * 0.02)) + 2);
+    delayBuffer.setSize(preparedChannels,
+                        static_cast<int>(std::ceil(sampleRate * 2.0)) + 2);
+    smoothedDelaySamples.reset(sampleRate, 0.05);
+    smoothedDelaySamples.setCurrentAndTargetValue(sampleRate * 0.35);
+    reset();
+}
+
+void EffectsChain::reset()
+{
+    distortionToneState.fill(0.0f);
+    flangerFeedbackState.fill(0.0f);
+    flangerBuffer.clear();
+    delayBuffer.clear();
+    flangerWritePosition = 0;
+    delayWritePosition = 0;
+    flangerPhase = 0.0;
+    chorus.reset();
+    reverb.reset();
+}
+
+void EffectsChain::process(juce::AudioBuffer<float>& buffer)
+{
+    processDistortion(buffer);
+    processFlanger(buffer);
+
+    if (chorusParameters.enabled.load())
+    {
+        chorus.setRate(chorusParameters.rateHz.load());
+        chorus.setDepth(chorusParameters.depth.load());
+        chorus.setCentreDelay(12.0f);
+        chorus.setFeedback(0.05f);
+        chorus.setMix(chorusParameters.mix.load());
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        chorus.process(context);
+    }
+
+    processDelay(buffer);
+
+    if (reverbParameters.enabled.load())
+    {
+        juce::dsp::Reverb::Parameters parameters;
+        parameters.roomSize = reverbParameters.size.load();
+        parameters.damping = reverbParameters.damping.load();
+        parameters.wetLevel = reverbParameters.mix.load();
+        parameters.dryLevel = 1.0f - parameters.wetLevel;
+        parameters.width = 1.0f;
+        parameters.freezeMode = 0.0f;
+        reverb.setParameters(parameters);
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        reverb.process(context);
+    }
+}
+
+void EffectsChain::setDistortion(bool enabled, float drive, float toneHz, float mix)
+{
+    distortion.enabled.store(enabled);
+    distortion.drive.store(juce::jlimit(1.0f, 20.0f, drive));
+    distortion.toneHz.store(juce::jlimit(200.0f, 20000.0f, toneHz));
+    distortion.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setFlanger(bool enabled, float rateHz, float depth,
+                              float feedback, float mix)
+{
+    flanger.enabled.store(enabled);
+    flanger.rateHz.store(juce::jlimit(0.01f, 10.0f, rateHz));
+    flanger.depth.store(juce::jlimit(0.0f, 1.0f, depth));
+    flanger.feedback.store(juce::jlimit(-0.95f, 0.95f, feedback));
+    flanger.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setChorus(bool enabled, float rateHz, float depth, float mix)
+{
+    chorusParameters.enabled.store(enabled);
+    chorusParameters.rateHz.store(juce::jlimit(0.01f, 10.0f, rateHz));
+    chorusParameters.depth.store(juce::jlimit(0.0f, 1.0f, depth));
+    chorusParameters.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setDelay(bool enabled, float timeMs, float feedback, float mix)
+{
+    delay.enabled.store(enabled);
+    delay.timeMs.store(juce::jlimit(1.0f, 1500.0f, timeMs));
+    delay.feedback.store(juce::jlimit(0.0f, 0.95f, feedback));
+    delay.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setReverb(bool enabled, float size, float damping, float mix)
+{
+    reverbParameters.enabled.store(enabled);
+    reverbParameters.size.store(juce::jlimit(0.0f, 1.0f, size));
+    reverbParameters.damping.store(juce::jlimit(0.0f, 1.0f, damping));
+    reverbParameters.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::processDistortion(juce::AudioBuffer<float>& buffer)
+{
+    if (! distortion.enabled.load())
+        return;
+
+    const auto drive = distortion.drive.load();
+    const auto mix = distortion.mix.load();
+    const auto cutoff = juce::jmin(distortion.toneHz.load(),
+                                   static_cast<float>(sampleRate * 0.45));
+    const auto coefficient = static_cast<float>(std::exp(-juce::MathConstants<double>::twoPi
+                                                          * cutoff / sampleRate));
+    const auto normalisation = 1.0f / std::tanh(drive);
+
+    for (int channel = 0; channel < juce::jmin(buffer.getNumChannels(), preparedChannels); ++channel)
+    {
+        auto* samples = buffer.getWritePointer(channel);
+        auto state = distortionToneState[static_cast<size_t>(channel)];
+        for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+        {
+            const auto dry = samples[frame];
+            const auto shaped = std::tanh(dry * drive) * normalisation;
+            state = (1.0f - coefficient) * shaped + coefficient * state;
+            samples[frame] = dry + mix * (state - dry);
+        }
+        distortionToneState[static_cast<size_t>(channel)] = state;
+    }
+}
+
+void EffectsChain::processFlanger(juce::AudioBuffer<float>& buffer)
+{
+    if (! flanger.enabled.load() || flangerBuffer.getNumSamples() == 0)
+        return;
+
+    const auto rate = flanger.rateHz.load();
+    const auto depth = flanger.depth.load();
+    const auto feedback = flanger.feedback.load();
+    const auto mix = flanger.mix.load();
+    const auto bufferLength = flangerBuffer.getNumSamples();
+
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto lfo = 0.5 + 0.5 * std::sin(flangerPhase);
+        const auto delaySamples = sampleRate * (0.001 + 0.005 * depth * lfo);
+        auto readPosition = static_cast<double>(flangerWritePosition) - delaySamples;
+        while (readPosition < 0.0)
+            readPosition += bufferLength;
+        const auto first = static_cast<int>(readPosition) % bufferLength;
+        const auto second = (first + 1) % bufferLength;
+        const auto alpha = static_cast<float>(readPosition - std::floor(readPosition));
+
+        for (int channel = 0; channel < juce::jmin(buffer.getNumChannels(), preparedChannels); ++channel)
+        {
+            auto* samples = buffer.getWritePointer(channel);
+            const auto delayed = flangerBuffer.getSample(channel, first)
+                + alpha * (flangerBuffer.getSample(channel, second)
+                         - flangerBuffer.getSample(channel, first));
+            const auto dry = samples[frame];
+            flangerBuffer.setSample(channel, flangerWritePosition,
+                                    dry + delayed * feedback);
+            samples[frame] = dry + mix * (delayed - dry);
+        }
+
+        flangerWritePosition = (flangerWritePosition + 1) % bufferLength;
+        flangerPhase += juce::MathConstants<double>::twoPi * rate / sampleRate;
+        if (flangerPhase >= juce::MathConstants<double>::twoPi)
+            flangerPhase -= juce::MathConstants<double>::twoPi;
+    }
+}
+
+void EffectsChain::processDelay(juce::AudioBuffer<float>& buffer)
+{
+    if (! delay.enabled.load() || delayBuffer.getNumSamples() == 0)
+        return;
+
+    smoothedDelaySamples.setTargetValue(sampleRate * delay.timeMs.load() / 1000.0);
+    const auto feedback = delay.feedback.load();
+    const auto mix = delay.mix.load();
+    const auto bufferLength = delayBuffer.getNumSamples();
+
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        auto readPosition = static_cast<double>(delayWritePosition)
+                          - smoothedDelaySamples.getNextValue();
+        while (readPosition < 0.0)
+            readPosition += bufferLength;
+        const auto first = static_cast<int>(readPosition) % bufferLength;
+        const auto second = (first + 1) % bufferLength;
+        const auto alpha = static_cast<float>(readPosition - std::floor(readPosition));
+
+        for (int channel = 0; channel < juce::jmin(buffer.getNumChannels(), preparedChannels); ++channel)
+        {
+            auto* samples = buffer.getWritePointer(channel);
+            const auto delayed = delayBuffer.getSample(channel, first)
+                + alpha * (delayBuffer.getSample(channel, second)
+                         - delayBuffer.getSample(channel, first));
+            const auto dry = samples[frame];
+            delayBuffer.setSample(channel, delayWritePosition, dry + delayed * feedback);
+            samples[frame] = dry + mix * (delayed - dry);
+        }
+        delayWritePosition = (delayWritePosition + 1) % bufferLength;
+    }
+}

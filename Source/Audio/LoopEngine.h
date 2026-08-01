@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "EffectsChain.h"
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -29,6 +30,11 @@ public:
     void setEnvelope(double attackSeconds, double decaySeconds,
                      float sustainLevel, double releaseSeconds);
     void setEnvelopeCycle(bool shouldRepeat);
+    void setDistortion(bool enabled, float drive, float toneHz, float mix);
+    void setFlanger(bool enabled, float rateHz, float depth, float feedback, float mix);
+    void setChorus(bool enabled, float rateHz, float depth, float mix);
+    void setDelay(bool enabled, float timeMs, float feedback, float mix);
+    void setReverb(bool enabled, float size, float damping, float mix);
 
     [[nodiscard]] bool hasClip() const;
     [[nodiscard]] bool isPlaying() const;
@@ -89,6 +95,7 @@ private:
     float releaseStep = 0.0f;
     double playhead = 0.0;
     double deviceSampleRate = 44100.0;
+    EffectsChain effectsChain;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoopEngine)
 };

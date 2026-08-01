@@ -22,7 +22,9 @@ target_sources(Mela PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
     Source/Audio/LoopEngine.cpp
+    Source/Audio/EffectsChain.cpp
     Source/UI/WaveformEditor.cpp
+    Source/UI/EffectPanel.cpp
 )
 
 target_include_directories(Mela PRIVATE Source)
@@ -37,6 +39,7 @@ target_link_libraries(Mela PRIVATE
     juce::juce_audio_devices
     juce::juce_audio_formats
     juce::juce_audio_utils
+    juce::juce_dsp
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags

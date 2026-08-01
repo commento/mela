@@ -14,6 +14,8 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - modalita `ADSR CICLICO`, visualizzata sopra la forma d'onda e ripetuta a ogni giro;
 - manopole touch: trascinamento verso l'alto per aumentare e verso il basso per diminuire;
 - doppio tap su una manopola per ripristinarne il valore predefinito;
+- pagina FX separata con Distorsione, Flanger, Chorus, Delay e Riverbero;
+- bypass e mix indipendenti per ogni effetto;
 - breve crossfade al punto di loop per ridurre i click;
 - conversione della frequenza di campionamento tramite interpolazione lineare;
 - volume;

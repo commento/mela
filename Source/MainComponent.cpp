@@ -39,6 +39,7 @@ MainComponent::MainComponent()
     speedSlider.setMouseDragSensitivity(300);
     speedSlider.setRange(0.25, 1.5, 0.01);
     speedSlider.setValue(1.0, juce::dontSendNotification);
+    speedSlider.setDoubleClickReturnValue(true, 1.0);
     speedSlider.setTextValueSuffix(" x");
     speedSlider.onValueChange = [this]
     {
@@ -53,6 +54,7 @@ MainComponent::MainComponent()
     gainSlider.setMouseDragSensitivity(300);
     gainSlider.setRange(0.0, 1.0, 0.01);
     gainSlider.setValue(0.8, juce::dontSendNotification);
+    gainSlider.setDoubleClickReturnValue(true, 0.8);
     gainSlider.onValueChange = [this]
     {
         engine.setGain(static_cast<float>(gainSlider.getValue()));
@@ -72,6 +74,7 @@ MainComponent::MainComponent()
         slider.setMouseDragSensitivity(300);
         slider.setRange(0.0, maximum, 0.01);
         slider.setValue(initialValue, juce::dontSendNotification);
+        slider.setDoubleClickReturnValue(true, initialValue);
         slider.setTextValueSuffix(suffix);
         slider.onValueChange = [this] { updateEnvelope(); };
     };

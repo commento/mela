@@ -24,9 +24,16 @@ void WaveformEditor::resetTrim()
     repaint();
 }
 
+void WaveformEditor::setTrimRange(double start, double end)
+{
+    trimStart = juce::jlimit(0.0, 1.0, start);
+    trimEnd = juce::jlimit(trimStart, 1.0, end);
+    repaint();
+}
+
 void WaveformEditor::setEnvelope(double attack, double decay, float sustain,
                                  double release, double playbackRate,
-                                 bool cycleEnabled)
+                                 bool cycleEnabled, bool reversed)
 {
     envelopeAttack = juce::jmax(0.0, attack);
     envelopeDecay = juce::jmax(0.0, decay);
@@ -34,6 +41,7 @@ void WaveformEditor::setEnvelope(double attack, double decay, float sustain,
     envelopeRelease = juce::jmax(0.0, release);
     currentPlaybackRate = juce::jmax(0.01, playbackRate);
     envelopeCycleEnabled = cycleEnabled;
+    playbackReversed = reversed;
     repaint();
 }
 
@@ -99,7 +107,10 @@ void WaveformEditor::paint(juce::Graphics& graphics)
         const auto xAtTime = [this, outputDuration](double time)
         {
             const auto phase = outputDuration > 0.0 ? time / outputDuration : 0.0;
-            return normalisedToX(trimStart + phase * (trimEnd - trimStart));
+            const auto position = playbackReversed
+                ? trimEnd - phase * (trimEnd - trimStart)
+                : trimStart + phase * (trimEnd - trimStart);
+            return normalisedToX(position);
         };
         const auto envelopeTop = plot.getY() + 20.0f;
         const auto envelopeBottom = plot.getBottom() - 20.0f;

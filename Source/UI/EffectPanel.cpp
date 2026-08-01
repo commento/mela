@@ -16,7 +16,7 @@ void EffectPanel::configure(const juce::String& effectName,
             onChange();
     };
 
-    parameterCount = juce::jmin(4, static_cast<int>(newParameters.size()));
+    parameterCount = juce::jmin(5, static_cast<int>(newParameters.size()));
     auto parameter = newParameters.begin();
     for (int index = 0; index < parameterCount; ++index, ++parameter)
     {
@@ -71,7 +71,8 @@ void EffectPanel::resized()
     titleLabel.setBounds(heading);
     area.removeFromTop(5);
 
-    const auto columns = parameterCount <= 2 ? parameterCount : 2;
+    const auto columns = parameterCount <= 2 ? parameterCount
+                       : parameterCount <= 4 ? 2 : 3;
     const auto rows = parameterCount <= 2 ? 1 : 2;
     if (columns == 0)
         return;

@@ -12,6 +12,8 @@ public:
     void process(juce::AudioBuffer<float>& buffer);
 
     void setDistortion(bool enabled, float drive, float toneHz, float mix);
+    void setGranular(bool enabled, float sizeMs, float densityHz,
+                     float positionMs, float pitchSemitones, float mix);
     void setFlanger(bool enabled, float rateHz, float depth, float feedback, float mix);
     void setChorus(bool enabled, float rateHz, float depth, float mix);
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
@@ -25,6 +27,16 @@ private:
         std::atomic<float> toneHz { 12000.0f };
         std::atomic<float> mix { 0.5f };
     } distortion;
+
+    struct GranularParameters
+    {
+        std::atomic<bool> enabled { false };
+        std::atomic<float> sizeMs { 80.0f };
+        std::atomic<float> densityHz { 12.0f };
+        std::atomic<float> positionMs { 250.0f };
+        std::atomic<float> pitchSemitones { 0.0f };
+        std::atomic<float> mix { 0.5f };
+    } granular;
 
     struct FlangerParameters
     {
@@ -60,6 +72,7 @@ private:
     } reverbParameters;
 
     void processDistortion(juce::AudioBuffer<float>& buffer);
+    void processGranular(juce::AudioBuffer<float>& buffer);
     void processFlanger(juce::AudioBuffer<float>& buffer);
     void processDelay(juce::AudioBuffer<float>& buffer);
 
@@ -67,6 +80,21 @@ private:
     int preparedChannels = 2;
     std::array<float, 2> distortionToneState {};
     std::array<float, 2> flangerFeedbackState {};
+    struct Grain
+    {
+        bool active = false;
+        double readPosition = 0.0;
+        double increment = 1.0;
+        int age = 0;
+        int length = 1;
+    };
+    static constexpr int maximumGrains = 24;
+    std::array<Grain, maximumGrains> grains;
+    juce::AudioBuffer<float> granularBuffer;
+    int granularWritePosition = 0;
+    double samplesUntilNextGrain = 0.0;
+    bool granularWasEnabled = false;
+    juce::Random granularRandom;
     juce::AudioBuffer<float> flangerBuffer;
     juce::AudioBuffer<float> delayBuffer;
     int flangerWritePosition = 0;
@@ -75,4 +103,5 @@ private:
     juce::SmoothedValue<double> smoothedDelaySamples;
     juce::dsp::Chorus<float> chorus;
     juce::dsp::Reverb reverb;
+    juce::dsp::Limiter<float> masterLimiter;
 };

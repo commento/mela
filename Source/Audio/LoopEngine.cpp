@@ -9,8 +9,14 @@ LoopEngine::LoopEngine()
     formatManager.registerBasicFormats();
 }
 
-bool LoopEngine::loadFile(const juce::File& file, juce::String& errorMessage)
+bool LoopEngine::loadFile(int slotIndex, const juce::File& file, juce::String& errorMessage)
 {
+    if (! isValidSlot(slotIndex))
+    {
+        errorMessage = "Slot non valido";
+        return false;
+    }
+
     std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
     if (reader == nullptr)
     {
@@ -37,64 +43,97 @@ bool LoopEngine::loadFile(const juce::File& file, juce::String& errorMessage)
     }
 
     createWaveformOverview(*newClip);
-    command.store(Command::stop);
-    trimStart.store(0.0);
-    trimEnd.store(1.0);
-    std::atomic_store(&clip, std::shared_ptr<const Clip>(std::move(newClip)));
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    voice.command.store(Command::stopImmediate);
+    voice.trimStart.store(0.0);
+    voice.trimEnd.store(1.0);
+    std::atomic_store(&voice.clip, std::shared_ptr<const Clip>(std::move(newClip)));
     return true;
 }
 
-void LoopEngine::play()
+void LoopEngine::play(int slotIndex)
 {
-    command.store(Command::play);
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].command.store(Command::play);
 }
 
-void LoopEngine::stop()
+void LoopEngine::stop(int slotIndex)
 {
-    command.store(Command::stop);
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].command.store(Command::stop);
 }
 
-void LoopEngine::setLooping(bool shouldLoop)
+void LoopEngine::stopAll()
 {
-    looping.store(shouldLoop);
+    for (auto& voice : voices)
+        voice.command.store(Command::stop);
 }
 
-void LoopEngine::setGain(float newGain)
+void LoopEngine::setLooping(int slotIndex, bool shouldLoop)
 {
-    gain.store(juce::jlimit(0.0f, 1.0f, newGain));
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].looping.store(shouldLoop);
 }
 
-void LoopEngine::setPlaybackRate(double newRate)
+void LoopEngine::setReverse(int slotIndex, bool shouldReverse)
 {
-    playbackRate.store(juce::jlimit(0.25, 1.5, newRate));
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].reverse.store(shouldReverse);
 }
 
-void LoopEngine::setTrimRange(double newStart, double newEnd)
+void LoopEngine::setGain(int slotIndex, float newGain)
 {
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].gain.store(juce::jlimit(0.0f, 1.0f, newGain));
+}
+
+void LoopEngine::setPlaybackRate(int slotIndex, double newRate)
+{
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].playbackRate.store(juce::jlimit(0.25, 1.5, newRate));
+}
+
+void LoopEngine::setTrimRange(int slotIndex, double newStart, double newEnd)
+{
+    if (! isValidSlot(slotIndex))
+        return;
+
     constexpr auto minimumRange = 0.001;
     const auto start = juce::jlimit(0.0, 1.0 - minimumRange, newStart);
     const auto end = juce::jlimit(start + minimumRange, 1.0, newEnd);
-    trimStart.store(start);
-    trimEnd.store(end);
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    voice.trimStart.store(start);
+    voice.trimEnd.store(end);
 }
 
-void LoopEngine::setEnvelope(double newAttack, double newDecay,
-                             float newSustain, double newRelease)
+void LoopEngine::setEnvelope(int slotIndex, double attack, double decay,
+                             float sustain, double release)
 {
-    attackSeconds.store(juce::jlimit(0.0, 10.0, newAttack));
-    decaySeconds.store(juce::jlimit(0.0, 10.0, newDecay));
-    sustainLevel.store(juce::jlimit(0.0f, 1.0f, newSustain));
-    releaseSeconds.store(juce::jlimit(0.0, 20.0, newRelease));
+    if (! isValidSlot(slotIndex))
+        return;
+
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    voice.attackSeconds.store(juce::jlimit(0.0, 10.0, attack));
+    voice.decaySeconds.store(juce::jlimit(0.0, 10.0, decay));
+    voice.sustainLevel.store(juce::jlimit(0.0f, 1.0f, sustain));
+    voice.releaseSeconds.store(juce::jlimit(0.0, 20.0, release));
 }
 
-void LoopEngine::setEnvelopeCycle(bool shouldRepeat)
+void LoopEngine::setEnvelopeCycle(int slotIndex, bool shouldRepeat)
 {
-    envelopeCycle.store(shouldRepeat);
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].envelopeCycle.store(shouldRepeat);
 }
 
 void LoopEngine::setDistortion(bool enabled, float drive, float toneHz, float mix)
 {
     effectsChain.setDistortion(enabled, drive, toneHz, mix);
+}
+
+void LoopEngine::setGranular(bool enabled, float sizeMs, float densityHz,
+                             float positionMs, float pitchSemitones, float mix)
+{
+    effectsChain.setGranular(enabled, sizeMs, densityHz, positionMs, pitchSemitones, mix);
 }
 
 void LoopEngine::setFlanger(bool enabled, float rateHz, float depth,
@@ -118,44 +157,48 @@ void LoopEngine::setReverb(bool enabled, float size, float damping, float mix)
     effectsChain.setReverb(enabled, size, damping, mix);
 }
 
-bool LoopEngine::hasClip() const
+bool LoopEngine::hasClip(int slotIndex) const
 {
-    return std::atomic_load(&clip) != nullptr;
+    return isValidSlot(slotIndex)
+        && std::atomic_load(&voices[static_cast<size_t>(slotIndex)].clip) != nullptr;
 }
 
-bool LoopEngine::isPlaying() const
+bool LoopEngine::isPlaying(int slotIndex) const
 {
-    return playing.load();
+    return isValidSlot(slotIndex) && voices[static_cast<size_t>(slotIndex)].playing.load();
 }
 
-juce::String LoopEngine::getClipName() const
+juce::String LoopEngine::getClipName(int slotIndex) const
 {
-    const auto currentClip = std::atomic_load(&clip);
+    if (! isValidSlot(slotIndex))
+        return {};
+    const auto currentClip = std::atomic_load(&voices[static_cast<size_t>(slotIndex)].clip);
     return currentClip != nullptr ? currentClip->name : juce::String {};
 }
 
-double LoopEngine::getPlayheadNormalised() const
+double LoopEngine::getPlayheadNormalised(int slotIndex) const
 {
-    return playheadNormalised.load();
+    return isValidSlot(slotIndex)
+        ? voices[static_cast<size_t>(slotIndex)].playheadNormalised.load() : 0.0;
 }
 
-std::shared_ptr<const LoopEngine::Clip> LoopEngine::getClipForDisplay() const
+std::shared_ptr<const LoopEngine::Clip> LoopEngine::getClipForDisplay(int slotIndex) const
 {
-    return std::atomic_load(&clip);
+    return isValidSlot(slotIndex)
+        ? std::atomic_load(&voices[static_cast<size_t>(slotIndex)].clip) : nullptr;
 }
 
-void LoopEngine::audioDeviceIOCallbackWithContext(const float* const*,
-                                                   int,
+void LoopEngine::audioDeviceIOCallbackWithContext(const float* const*, int,
                                                    float* const* outputChannelData,
-                                                   int numOutputChannels,
-                                                   int numSamples,
+                                                   int numOutputChannels, int numSamples,
                                                    const juce::AudioIODeviceCallbackContext&)
 {
     for (int channel = 0; channel < numOutputChannels; ++channel)
         if (outputChannelData[channel] != nullptr)
             juce::FloatVectorOperations::clear(outputChannelData[channel], numSamples);
 
-    render(outputChannelData, numOutputChannels, numSamples);
+    for (auto& voice : voices)
+        renderVoice(voice, outputChannelData, numOutputChannels, numSamples);
 
     if (numOutputChannels > 0)
     {
@@ -169,17 +212,21 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
     deviceSampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
     if (device != nullptr)
     {
-        effectsChain.prepare(deviceSampleRate,
-                             device->getCurrentBufferSizeSamples(),
+        effectsChain.prepare(deviceSampleRate, device->getCurrentBufferSizeSamples(),
                              juce::jmax(1, device->getActiveOutputChannels().countNumberOfSetBits()));
     }
-    stop();
+    stopAll();
 }
 
 void LoopEngine::audioDeviceStopped()
 {
-    stop();
+    stopAll();
     effectsChain.reset();
+}
+
+bool LoopEngine::isValidSlot(int slotIndex)
+{
+    return juce::isPositiveAndBelow(slotIndex, numberOfSlots);
 }
 
 void LoopEngine::createWaveformOverview(Clip& target)
@@ -192,9 +239,6 @@ void LoopEngine::createWaveformOverview(Clip& target)
 
     for (int point = 0; point < pointCount; ++point)
     {
-        // Use 64-bit intermediates: for clips longer than roughly 20 seconds at
-        // 48 kHz, point * sampleCount can overflow a 32-bit int and make the
-        // overview appear as repeated sections of the waveform.
         const auto firstSample = static_cast<int>(
             static_cast<int64_t>(point) * sampleCount / pointCount);
         const auto lastSample = juce::jlimit(firstSample + 1, sampleCount,
@@ -208,93 +252,112 @@ void LoopEngine::createWaveformOverview(Clip& target)
             minimum = juce::jmin(minimum, range.getStart());
             maximum = juce::jmax(maximum, range.getEnd());
         }
-
         target.waveformMinimum[static_cast<size_t>(point)] = minimum;
         target.waveformMaximum[static_cast<size_t>(point)] = maximum;
     }
 }
 
-void LoopEngine::render(float* const* outputs, int outputChannels, int numSamples)
+void LoopEngine::renderVoice(Voice& voice, float* const* outputs,
+                             int outputChannels, int numSamples)
 {
-    const auto currentClip = std::atomic_load(&clip);
+    const auto currentClip = std::atomic_load(&voice.clip);
     if (currentClip == nullptr || currentClip->audio.getNumSamples() < 2)
         return;
 
     const auto sourceLength = currentClip->audio.getNumSamples();
-    const auto startSample = trimStart.load() * static_cast<double>(sourceLength - 1);
+    const auto startSample = voice.trimStart.load() * static_cast<double>(sourceLength - 1);
     const auto endSample = juce::jmax(startSample + 1.0,
-                                     trimEnd.load() * static_cast<double>(sourceLength));
+                                     voice.trimEnd.load() * static_cast<double>(sourceLength));
+    const auto isReversed = voice.reverse.load();
 
-    const auto pendingCommand = command.exchange(Command::none);
+    const auto pendingCommand = voice.command.exchange(Command::none);
     if (pendingCommand == Command::stop)
     {
-        beginRelease();
+        beginRelease(voice);
+    }
+    else if (pendingCommand == Command::stopImmediate)
+    {
+        voice.playing.store(false);
+        voice.envelopeLevel = 0.0f;
+        voice.envelopeStage = EnvelopeStage::idle;
+        voice.playhead = isReversed ? endSample - 0.0001 : startSample;
     }
     else if (pendingCommand == Command::play)
     {
-        playhead = startSample;
-        if (envelopeCycle.load())
+        voice.playhead = isReversed ? endSample - 0.0001 : startSample;
+        if (voice.envelopeCycle.load())
         {
-            envelopeLevel = 1.0f;
-            envelopeStage = EnvelopeStage::sustain;
+            voice.envelopeLevel = 1.0f;
+            voice.envelopeStage = EnvelopeStage::sustain;
         }
         else
         {
-            envelopeLevel = 0.0f;
-            envelopeStage = EnvelopeStage::attack;
+            voice.envelopeLevel = 0.0f;
+            voice.envelopeStage = EnvelopeStage::attack;
         }
-        playing.store(true);
+        voice.playing.store(true);
     }
 
-    if (! playing.load())
+    if (! voice.playing.load())
     {
-        playheadNormalised.store(startSample / static_cast<double>(sourceLength));
+        voice.playheadNormalised.store((isReversed ? endSample : startSample)
+                                       / static_cast<double>(sourceLength));
         return;
     }
 
     const auto sourceChannels = currentClip->audio.getNumChannels();
-    const auto currentRate = playbackRate.load();
-    const auto increment = (currentClip->sourceSampleRate / deviceSampleRate) * currentRate;
-    const auto currentGain = gain.load();
-    const auto shouldLoop = looping.load();
-    const auto cycleIsEnabled = envelopeCycle.load();
+    const auto currentRate = voice.playbackRate.load();
+    const auto incrementMagnitude = (currentClip->sourceSampleRate / deviceSampleRate) * currentRate;
+    const auto increment = isReversed ? -incrementMagnitude : incrementMagnitude;
+    const auto currentGain = voice.gain.load();
+    const auto shouldLoop = voice.looping.load();
+    const auto cycleIsEnabled = voice.envelopeCycle.load();
     const auto crossfadeSamples = shouldLoop
         ? juce::jmin(currentClip->sourceSampleRate * 0.005, (endSample - startSample) * 0.25)
         : 0.0;
 
     for (int frame = 0; frame < numSamples; ++frame)
     {
-        if (playhead < startSample)
-            playhead = startSample;
-
-        if (playhead >= endSample)
+        const auto outsideRange = isReversed ? voice.playhead < startSample
+                                             : voice.playhead >= endSample;
+        if (outsideRange)
         {
-            if (shouldLoop)
+            if (! shouldLoop)
             {
-                const auto loopSpan = juce::jmax(1.0,
-                    endSample - startSample - crossfadeSamples);
-                playhead = startSample + crossfadeSamples
-                         + std::fmod(playhead - endSample, loopSpan);
+                voice.playing.store(false);
+                voice.playhead = isReversed ? endSample - 0.0001 : startSample;
+                break;
+            }
+
+            const auto loopSpan = juce::jmax(1.0, endSample - startSample - crossfadeSamples);
+            if (isReversed)
+            {
+                const auto overshoot = startSample - voice.playhead;
+                voice.playhead = endSample - crossfadeSamples - std::fmod(overshoot, loopSpan);
             }
             else
             {
-                playing.store(false);
-                playhead = startSample;
-                break;
+                voice.playhead = startSample + crossfadeSamples
+                               + std::fmod(voice.playhead - endSample, loopSpan);
             }
         }
 
-        const auto first = juce::jlimit(0, sourceLength - 1, static_cast<int>(playhead));
-        const auto second = (static_cast<double>(first + 1) < endSample) ? first + 1
-                                                                        : static_cast<int>(startSample);
-        const auto alpha = static_cast<float>(playhead - static_cast<double>(first));
+        const auto first = juce::jlimit(0, sourceLength - 1,
+                                        static_cast<int>(voice.playhead));
+        const auto candidateSecond = first + 1;
+        const auto second = static_cast<double>(candidateSecond) < endSample
+            ? juce::jlimit(0, sourceLength - 1, candidateSecond)
+            : (isReversed ? first : static_cast<int>(startSample));
+        const auto alpha = static_cast<float>(voice.playhead - static_cast<double>(first));
+        const auto distanceFromBeginning = isReversed ? endSample - voice.playhead
+                                                      : voice.playhead - startSample;
         const auto fadeIn = crossfadeSamples > 0.0
             ? static_cast<float>(juce::jlimit(0.0, 1.0,
-                (playhead - startSample) / crossfadeSamples))
+                                             distanceFromBeginning / crossfadeSamples))
             : 1.0f;
         const auto cycleLevel = cycleIsEnabled
-            ? cycleEnvelopeLevel(playhead, startSample, endSample,
-                                 currentClip->sourceSampleRate, currentRate)
+            ? cycleEnvelopeLevel(voice, voice.playhead, startSample, endSample,
+                                 currentClip->sourceSampleRate, currentRate, isReversed)
             : 1.0f;
 
         for (int channel = 0; channel < outputChannels; ++channel)
@@ -306,14 +369,21 @@ void LoopEngine::render(float* const* outputs, int outputChannels, int numSample
             const auto* source = currentClip->audio.getReadPointer(sourceChannel);
             auto sample = source[first] + alpha * (source[second] - source[first]);
 
-            if (crossfadeSamples > 0.0 && playhead >= endSample - crossfadeSamples)
+            const auto inCrossfade = crossfadeSamples > 0.0
+                && (isReversed ? voice.playhead <= startSample + crossfadeSamples
+                               : voice.playhead >= endSample - crossfadeSamples);
+            if (inCrossfade)
             {
-                const auto fade = static_cast<float>(
-                    (playhead - (endSample - crossfadeSamples)) / crossfadeSamples);
-                const auto wrappedPosition = startSample
-                                           + playhead - (endSample - crossfadeSamples);
-                const auto wrappedFirst = juce::jlimit(
-                    0, sourceLength - 1, static_cast<int>(wrappedPosition));
+                const auto distance = isReversed
+                    ? startSample + crossfadeSamples - voice.playhead
+                    : voice.playhead - (endSample - crossfadeSamples);
+                const auto fade = static_cast<float>(juce::jlimit(0.0, 1.0,
+                                                                 distance / crossfadeSamples));
+                const auto wrappedPosition = isReversed
+                    ? endSample - distance
+                    : startSample + distance;
+                const auto wrappedFirst = juce::jlimit(0, sourceLength - 1,
+                                                       static_cast<int>(wrappedPosition));
                 const auto wrappedSecond = juce::jlimit(0, sourceLength - 1, wrappedFirst + 1);
                 const auto wrappedAlpha = static_cast<float>(
                     wrappedPosition - static_cast<double>(wrappedFirst));
@@ -323,126 +393,117 @@ void LoopEngine::render(float* const* outputs, int outputChannels, int numSample
             }
 
             outputs[channel][frame] += sample * currentGain * fadeIn
-                                     * envelopeLevel * cycleLevel;
+                                     * voice.envelopeLevel * cycleLevel;
         }
 
-        playhead += increment;
-        if (! cycleIsEnabled || envelopeStage == EnvelopeStage::release)
-            advanceEnvelope();
+        voice.playhead += increment;
+        if (! cycleIsEnabled || voice.envelopeStage == EnvelopeStage::release)
+            advanceEnvelope(voice);
         else
-            envelopeLevel = 1.0f;
+            voice.envelopeLevel = 1.0f;
 
-        if (envelopeStage == EnvelopeStage::idle)
+        if (voice.envelopeStage == EnvelopeStage::idle)
         {
-            playing.store(false);
-            playhead = startSample;
+            voice.playing.store(false);
+            voice.playhead = isReversed ? endSample - 0.0001 : startSample;
             break;
         }
     }
 
-    playheadNormalised.store(playhead / static_cast<double>(sourceLength));
+    voice.playheadNormalised.store(voice.playhead / static_cast<double>(sourceLength));
 }
 
-float LoopEngine::advanceEnvelope()
+float LoopEngine::advanceEnvelope(Voice& voice)
 {
     const auto oneSample = 1.0 / juce::jmax(1.0, deviceSampleRate);
-
-    switch (envelopeStage)
+    switch (voice.envelopeStage)
     {
         case EnvelopeStage::idle:
-            envelopeLevel = 0.0f;
+            voice.envelopeLevel = 0.0f;
             break;
-
         case EnvelopeStage::attack:
         {
-            const auto duration = attackSeconds.load();
+            const auto duration = voice.attackSeconds.load();
             if (duration <= oneSample)
             {
-                envelopeLevel = 1.0f;
-                envelopeStage = EnvelopeStage::decay;
+                voice.envelopeLevel = 1.0f;
+                voice.envelopeStage = EnvelopeStage::decay;
             }
-            else
+            else if ((voice.envelopeLevel += static_cast<float>(oneSample / duration)) >= 1.0f)
             {
-                envelopeLevel += static_cast<float>(oneSample / duration);
-                if (envelopeLevel >= 1.0f)
-                {
-                    envelopeLevel = 1.0f;
-                    envelopeStage = EnvelopeStage::decay;
-                }
+                voice.envelopeLevel = 1.0f;
+                voice.envelopeStage = EnvelopeStage::decay;
             }
             break;
         }
-
         case EnvelopeStage::decay:
         {
-            const auto target = sustainLevel.load();
-            const auto duration = decaySeconds.load();
-            if (duration <= oneSample || envelopeLevel <= target)
+            const auto target = voice.sustainLevel.load();
+            const auto duration = voice.decaySeconds.load();
+            if (duration <= oneSample || voice.envelopeLevel <= target)
             {
-                envelopeLevel = target;
-                envelopeStage = EnvelopeStage::sustain;
+                voice.envelopeLevel = target;
+                voice.envelopeStage = EnvelopeStage::sustain;
             }
             else
             {
-                envelopeLevel -= static_cast<float>((1.0 - target) * oneSample / duration);
-                if (envelopeLevel <= target)
+                voice.envelopeLevel -= static_cast<float>((1.0 - target) * oneSample / duration);
+                if (voice.envelopeLevel <= target)
                 {
-                    envelopeLevel = target;
-                    envelopeStage = EnvelopeStage::sustain;
+                    voice.envelopeLevel = target;
+                    voice.envelopeStage = EnvelopeStage::sustain;
                 }
             }
             break;
         }
-
         case EnvelopeStage::sustain:
-            envelopeLevel = sustainLevel.load();
+            voice.envelopeLevel = voice.sustainLevel.load();
             break;
-
         case EnvelopeStage::release:
-            envelopeLevel -= releaseStep;
-            if (envelopeLevel <= 0.0f)
+            voice.envelopeLevel -= voice.releaseStep;
+            if (voice.envelopeLevel <= 0.0f)
             {
-                envelopeLevel = 0.0f;
-                envelopeStage = EnvelopeStage::idle;
+                voice.envelopeLevel = 0.0f;
+                voice.envelopeStage = EnvelopeStage::idle;
             }
             break;
     }
-
-    return envelopeLevel;
+    return voice.envelopeLevel;
 }
 
-void LoopEngine::beginRelease()
+void LoopEngine::beginRelease(Voice& voice)
 {
-    if (! playing.load())
+    if (! voice.playing.load())
         return;
 
-    const auto duration = releaseSeconds.load();
-    if (duration <= 0.0 || envelopeLevel <= 0.0f)
+    const auto duration = voice.releaseSeconds.load();
+    if (duration <= 0.0 || voice.envelopeLevel <= 0.0f)
     {
-        envelopeLevel = 0.0f;
-        envelopeStage = EnvelopeStage::idle;
-        playing.store(false);
+        voice.envelopeLevel = 0.0f;
+        voice.envelopeStage = EnvelopeStage::idle;
+        voice.playing.store(false);
         return;
     }
 
-    releaseStep = envelopeLevel
+    voice.releaseStep = voice.envelopeLevel
         / static_cast<float>(juce::jmax(1.0, duration * deviceSampleRate));
-    envelopeStage = EnvelopeStage::release;
+    voice.envelopeStage = EnvelopeStage::release;
 }
 
-float LoopEngine::cycleEnvelopeLevel(double position, double startSample, double endSample,
-                                     double sourceSampleRate, double rate) const
+float LoopEngine::cycleEnvelopeLevel(const Voice& voice, double position,
+                                     double startSample, double endSample,
+                                     double sourceSampleRate, double rate,
+                                     bool isReversed) const
 {
     const auto safeRate = juce::jmax(0.01, rate);
     const auto duration = (endSample - startSample) / (sourceSampleRate * safeRate);
     if (duration <= 0.0)
         return 0.0f;
 
-    auto attack = attackSeconds.load();
-    auto decay = decaySeconds.load();
-    auto release = releaseSeconds.load();
+    auto attack = voice.attackSeconds.load();
+    auto decay = voice.decaySeconds.load();
+    auto release = voice.releaseSeconds.load();
     const auto shapedDuration = attack + decay + release;
-
     if (shapedDuration > duration && shapedDuration > 0.0)
     {
         const auto scale = duration / shapedDuration;
@@ -451,21 +512,18 @@ float LoopEngine::cycleEnvelopeLevel(double position, double startSample, double
         release *= scale;
     }
 
+    const auto travelledSamples = isReversed ? endSample - position : position - startSample;
     const auto elapsed = juce::jlimit(0.0, duration,
-        (position - startSample) / (sourceSampleRate * safeRate));
-    const auto sustain = sustainLevel.load();
-
+                                     travelledSamples / (sourceSampleRate * safeRate));
+    const auto sustain = voice.sustainLevel.load();
     if (attack > 0.0 && elapsed < attack)
         return static_cast<float>(elapsed / attack);
-
     if (decay > 0.0 && elapsed < attack + decay)
     {
         const auto phase = static_cast<float>((elapsed - attack) / decay);
         return 1.0f + phase * (sustain - 1.0f);
     }
-
     if (release > 0.0 && elapsed > duration - release)
         return sustain * static_cast<float>((duration - elapsed) / release);
-
     return sustain;
 }

@@ -14,9 +14,14 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
     };
     chorus.prepare(spec);
     reverb.prepare(spec);
+    masterLimiter.prepare(spec);
+    masterLimiter.setThreshold(-0.3f);
+    masterLimiter.setRelease(50.0f);
 
     flangerBuffer.setSize(preparedChannels,
                           static_cast<int>(std::ceil(sampleRate * 0.02)) + 2);
+    granularBuffer.setSize(preparedChannels,
+                           static_cast<int>(std::ceil(sampleRate * 4.0)) + 2);
     delayBuffer.setSize(preparedChannels,
                         static_cast<int>(std::ceil(sampleRate * 2.0)) + 2);
     smoothedDelaySamples.reset(sampleRate, 0.05);
@@ -28,6 +33,12 @@ void EffectsChain::reset()
 {
     distortionToneState.fill(0.0f);
     flangerFeedbackState.fill(0.0f);
+    for (auto& grain : grains)
+        grain = {};
+    granularBuffer.clear();
+    granularWritePosition = 0;
+    samplesUntilNextGrain = 0.0;
+    granularWasEnabled = false;
     flangerBuffer.clear();
     delayBuffer.clear();
     flangerWritePosition = 0;
@@ -35,11 +46,13 @@ void EffectsChain::reset()
     flangerPhase = 0.0;
     chorus.reset();
     reverb.reset();
+    masterLimiter.reset();
 }
 
 void EffectsChain::process(juce::AudioBuffer<float>& buffer)
 {
     processDistortion(buffer);
+    processGranular(buffer);
     processFlanger(buffer);
 
     if (chorusParameters.enabled.load())
@@ -70,6 +83,10 @@ void EffectsChain::process(juce::AudioBuffer<float>& buffer)
         juce::dsp::ProcessContextReplacing<float> context(block);
         reverb.process(context);
     }
+
+    juce::dsp::AudioBlock<float> masterBlock(buffer);
+    juce::dsp::ProcessContextReplacing<float> masterContext(masterBlock);
+    masterLimiter.process(masterContext);
 }
 
 void EffectsChain::setDistortion(bool enabled, float drive, float toneHz, float mix)
@@ -78,6 +95,17 @@ void EffectsChain::setDistortion(bool enabled, float drive, float toneHz, float 
     distortion.drive.store(juce::jlimit(1.0f, 20.0f, drive));
     distortion.toneHz.store(juce::jlimit(200.0f, 20000.0f, toneHz));
     distortion.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setGranular(bool enabled, float sizeMs, float densityHz,
+                               float positionMs, float pitchSemitones, float mix)
+{
+    granular.enabled.store(enabled);
+    granular.sizeMs.store(juce::jlimit(10.0f, 250.0f, sizeMs));
+    granular.densityHz.store(juce::jlimit(1.0f, 40.0f, densityHz));
+    granular.positionMs.store(juce::jlimit(0.0f, 2000.0f, positionMs));
+    granular.pitchSemitones.store(juce::jlimit(-12.0f, 12.0f, pitchSemitones));
+    granular.mix.store(juce::jlimit(0.0f, 1.0f, mix));
 }
 
 void EffectsChain::setFlanger(bool enabled, float rateHz, float depth,
@@ -139,6 +167,108 @@ void EffectsChain::processDistortion(juce::AudioBuffer<float>& buffer)
             samples[frame] = dry + mix * (state - dry);
         }
         distortionToneState[static_cast<size_t>(channel)] = state;
+    }
+}
+
+void EffectsChain::processGranular(juce::AudioBuffer<float>& buffer)
+{
+    if (granularBuffer.getNumSamples() == 0)
+        return;
+
+    const auto enabled = granular.enabled.load();
+    if (! enabled && granularWasEnabled)
+    {
+        for (auto& grain : grains)
+            grain.active = false;
+        samplesUntilNextGrain = 0.0;
+    }
+    granularWasEnabled = enabled;
+
+    const auto sizeMs = granular.sizeMs.load();
+    const auto density = granular.densityHz.load();
+    const auto positionMs = granular.positionMs.load();
+    const auto pitchRatio = std::pow(2.0, granular.pitchSemitones.load() / 12.0);
+    const auto mix = granular.mix.load();
+    const auto grainLength = juce::jlimit(2,
+        static_cast<int>(sampleRate * 0.25),
+        static_cast<int>(std::round(sampleRate * sizeMs / 1000.0)));
+    const auto bufferLength = granularBuffer.getNumSamples();
+    const auto channels = juce::jmin(buffer.getNumChannels(), preparedChannels);
+    const auto expectedOverlap = density * static_cast<float>(grainLength / sampleRate);
+    const auto wetNormalisation = 1.0f / juce::jmax(1.0f, expectedOverlap * 0.5f);
+
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        for (int channel = 0; channel < channels; ++channel)
+            granularBuffer.setSample(channel, granularWritePosition,
+                                     buffer.getSample(channel, frame));
+
+        if (enabled)
+        {
+            if (samplesUntilNextGrain <= 0.0)
+            {
+                for (auto& grain : grains)
+                {
+                    if (grain.active)
+                        continue;
+
+                    const auto historySamples = sampleRate * positionMs / 1000.0;
+                    const auto safetyDistance = grainLength * juce::jmax(1.0, pitchRatio) + 2.0;
+                    const auto spray = granularRandom.nextDouble() * grainLength * 0.25;
+                    grain.active = true;
+                    grain.age = 0;
+                    grain.length = grainLength;
+                    grain.increment = pitchRatio;
+                    grain.readPosition = granularWritePosition
+                                       - juce::jmax(historySamples, safetyDistance) - spray;
+                    while (grain.readPosition < 0.0)
+                        grain.readPosition += bufferLength;
+                    break;
+                }
+                samplesUntilNextGrain += sampleRate / juce::jmax(1.0f, density);
+            }
+
+            std::array<float, 2> wet {};
+            for (auto& grain : grains)
+            {
+                if (! grain.active)
+                    continue;
+
+                const auto phase = static_cast<double>(grain.age)
+                                 / static_cast<double>(juce::jmax(1, grain.length - 1));
+                const auto window = static_cast<float>(0.5 - 0.5
+                    * std::cos(juce::MathConstants<double>::twoPi * phase));
+                const auto first = static_cast<int>(grain.readPosition) % bufferLength;
+                const auto second = (first + 1) % bufferLength;
+                const auto alpha = static_cast<float>(grain.readPosition
+                                                       - std::floor(grain.readPosition));
+
+                for (int channel = 0; channel < channels; ++channel)
+                {
+                    const auto firstSample = granularBuffer.getSample(channel, first);
+                    const auto secondSample = granularBuffer.getSample(channel, second);
+                    wet[static_cast<size_t>(channel)] += window
+                        * (firstSample + alpha * (secondSample - firstSample));
+                }
+
+                grain.readPosition += grain.increment;
+                while (grain.readPosition >= bufferLength)
+                    grain.readPosition -= bufferLength;
+                if (++grain.age >= grain.length)
+                    grain.active = false;
+            }
+
+            for (int channel = 0; channel < channels; ++channel)
+            {
+                auto* samples = buffer.getWritePointer(channel);
+                const auto dry = samples[frame];
+                const auto processed = wet[static_cast<size_t>(channel)] * wetNormalisation;
+                samples[frame] = dry + mix * (processed - dry);
+            }
+            --samplesUntilNextGrain;
+        }
+
+        granularWritePosition = (granularWritePosition + 1) % bufferLength;
     }
 }
 

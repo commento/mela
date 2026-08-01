@@ -32,8 +32,8 @@ public:
 private:
     juce::Label titleLabel;
     juce::ToggleButton enabledButton { "ON" };
-    std::array<juce::Slider, 4> sliders;
-    std::array<juce::Label, 4> labels;
+    std::array<juce::Slider, 5> sliders;
+    std::array<juce::Label, 5> labels;
     int parameterCount = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EffectPanel)

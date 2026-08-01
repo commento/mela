@@ -4,18 +4,22 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 
 ## Funzioni attuali
 
-- un loop modificabile alla volta;
+- quattro slot indipendenti e riproducibili contemporaneamente;
+- editor contestuale per modificare un sample alla volta;
 - caricamento WAV, AIFF, FLAC e OGG (in base ai formati JUCE disponibili);
 - forma d'onda con maniglie touch per scegliere inizio e fine;
 - zoom con pinch a due dita, pan con trascinamento e reset con doppio tap;
 - riproduzione continua oppure singola;
+- reverse indipendente per ogni loop;
 - velocità regolabile da 0,25× a 1,5× (con variazione dell'intonazione);
 - inviluppo ADSR: fade-in con Attack e fade-out allo Stop con Release;
 - modalita `ADSR CICLICO`, visualizzata sopra la forma d'onda e ripetuta a ogni giro;
 - manopole touch: trascinamento verso l'alto per aumentare e verso il basso per diminuire;
 - doppio tap su una manopola per ripristinarne il valore predefinito;
-- pagina FX separata con Distorsione, Flanger, Chorus, Delay e Riverbero;
+- pagina FX separata con Distorsione, Granulare, Flanger, Chorus, Delay e Riverbero;
+- sintesi granulare real-time con Size, Density, Position, Pitch e Mix;
 - bypass e mix indipendenti per ogni effetto;
+- limiter master per proteggere il mix dei quattro loop dal clipping;
 - breve crossfade al punto di loop per ridurre i click;
 - conversione della frequenza di campionamento tramite interpolazione lineare;
 - volume;

@@ -12,9 +12,10 @@ public:
     void setClip(std::shared_ptr<const LoopEngine::Clip> newClip);
     void setPlayhead(double newPosition);
     void resetTrim();
+    void setTrimRange(double start, double end);
     void setEnvelope(double attackSeconds, double decaySeconds,
                      float sustainLevel, double releaseSeconds,
-                     double playbackRate, bool cycleEnabled);
+                     double playbackRate, bool cycleEnabled, bool reversed);
 
     void paint(juce::Graphics& graphics) override;
     void mouseDown(const juce::MouseEvent& event) override;
@@ -68,7 +69,8 @@ private:
     double envelopeAttack = 0.02;
     double envelopeDecay = 0.1;
     float envelopeSustain = 1.0f;
-    double envelopeRelease = 0.3;
+    double envelopeRelease = 0.0;
     double currentPlaybackRate = 1.0;
     bool envelopeCycleEnabled = true;
+    bool playbackReversed = false;
 };

@@ -25,6 +25,8 @@ public:
                    std::initializer_list<Parameter> newParameters);
     [[nodiscard]] bool isEnabled() const;
     [[nodiscard]] double value(int parameterIndex) const;
+    void setEnabled(bool shouldBeEnabled);
+    void setValue(int parameterIndex, double newValue);
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;

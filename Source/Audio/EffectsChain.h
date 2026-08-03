@@ -10,6 +10,10 @@ public:
     void prepare(double newSampleRate, int maximumBlockSize, int channels);
     void reset();
     void process(juce::AudioBuffer<float>& buffer);
+    void processInserts(juce::AudioBuffer<float>& buffer);
+    void processDelayReturn(juce::AudioBuffer<float>& buffer);
+    void processReverbReturn(juce::AudioBuffer<float>& buffer);
+    void processLimiter(juce::AudioBuffer<float>& buffer);
 
     void setDistortion(bool enabled, float drive, float toneHz, float mix);
     void setGranular(bool enabled, float sizeMs, float densityHz,
@@ -74,7 +78,7 @@ private:
     void processDistortion(juce::AudioBuffer<float>& buffer);
     void processGranular(juce::AudioBuffer<float>& buffer);
     void processFlanger(juce::AudioBuffer<float>& buffer);
-    void processDelay(juce::AudioBuffer<float>& buffer);
+    void processDelay(juce::AudioBuffer<float>& buffer, bool wetOnly);
 
     double sampleRate = 44100.0;
     int preparedChannels = 2;
@@ -88,7 +92,8 @@ private:
         int age = 0;
         int length = 1;
     };
-    static constexpr int maximumGrains = 24;
+    // Four slot chains give a Pi-friendly maximum of 32 simultaneous grains.
+    static constexpr int maximumGrains = 8;
     std::array<Grain, maximumGrains> grains;
     juce::AudioBuffer<float> granularBuffer;
     int granularWritePosition = 0;

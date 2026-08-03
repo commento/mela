@@ -16,15 +16,19 @@ FetchContent_MakeAvailable(JUCE)
 juce_add_gui_app(Mela
     PRODUCT_NAME "Mela"
     COMPANY_NAME "Mela"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "Mela uses the microphone to record samples."
 )
 
 target_sources(Mela PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
     Source/Audio/LoopEngine.cpp
+    Source/Audio/AudioRecorder.cpp
     Source/Audio/EffectsChain.cpp
     Source/UI/WaveformEditor.cpp
     Source/UI/EffectPanel.cpp
+    Source/UI/TouchKeyboard.cpp
 )
 
 target_include_directories(Mela PRIVATE Source)

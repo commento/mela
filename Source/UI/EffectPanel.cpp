@@ -53,6 +53,19 @@ double EffectPanel::value(int parameterIndex) const
     return sliders[static_cast<size_t>(parameterIndex)].getValue();
 }
 
+void EffectPanel::setEnabled(bool shouldBeEnabled)
+{
+    enabledButton.setToggleState(shouldBeEnabled, juce::dontSendNotification);
+    repaint();
+}
+
+void EffectPanel::setValue(int parameterIndex, double newValue)
+{
+    if (juce::isPositiveAndBelow(parameterIndex, parameterCount))
+        sliders[static_cast<size_t>(parameterIndex)].setValue(
+            newValue, juce::dontSendNotification);
+}
+
 void EffectPanel::paint(juce::Graphics& graphics)
 {
     const auto colour = isEnabled() ? juce::Colour(0xff303d49) : juce::Colour(0xff252a31);

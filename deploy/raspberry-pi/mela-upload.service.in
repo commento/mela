@@ -1,0 +1,25 @@
+[Unit]
+Description=Mela Wi-Fi sample upload
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=/opt/mela-upload
+Environment=HOME=@HOME@
+Environment="MELA_INBOX=@HOME@/Music/Mela Inbox"
+Environment="MELA_CONFIG=@HOME@/.config/mela"
+ExecStart=/opt/mela-upload/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080 --workers 1
+Restart=on-failure
+RestartSec=3
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

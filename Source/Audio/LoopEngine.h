@@ -1,9 +1,11 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "AudioRecorder.h"
 #include "EffectsChain.h"
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -11,6 +13,14 @@ class LoopEngine final : public juce::AudioIODeviceCallback
 {
 public:
     static constexpr int numberOfSlots = 4;
+    static constexpr int instrumentPolyphony = 8;
+
+    enum class InstrumentMode
+    {
+        gate,
+        oneShot,
+        loop
+    };
 
     struct Clip
     {
@@ -35,12 +45,28 @@ public:
     void setEnvelope(int slotIndex, double attackSeconds, double decaySeconds,
                      float sustainLevel, double releaseSeconds);
     void setEnvelopeCycle(int slotIndex, bool shouldRepeat);
+    void setInstrumentRootNote(int slotIndex, int midiNote);
+    void setInstrumentMode(int slotIndex, InstrumentMode mode);
+    void setInstrumentEnvelope(int slotIndex, double attackSeconds, double decaySeconds,
+                               float sustainLevel, double releaseSeconds);
+    void noteOn(int slotIndex, int midiNote, float velocity);
+    void noteOff(int slotIndex, int midiNote);
+    void allNotesOff(int slotIndex);
+    void allNotesOff();
 
-    void setDistortion(bool enabled, float drive, float toneHz, float mix);
-    void setGranular(bool enabled, float sizeMs, float densityHz,
+    bool startRecording(const juce::File& destination, juce::String& errorMessage);
+    juce::File stopRecording();
+    [[nodiscard]] bool isRecording() const;
+    [[nodiscard]] double getRecordingDurationSeconds() const;
+
+    void setDistortion(int slotIndex, bool enabled, float drive, float toneHz, float mix);
+    void setGranular(int slotIndex, bool enabled, float sizeMs, float densityHz,
                      float positionMs, float pitchSemitones, float mix);
-    void setFlanger(bool enabled, float rateHz, float depth, float feedback, float mix);
-    void setChorus(bool enabled, float rateHz, float depth, float mix);
+    void setFlanger(int slotIndex, bool enabled, float rateHz, float depth,
+                    float feedback, float mix);
+    void setChorus(int slotIndex, bool enabled, float rateHz, float depth, float mix);
+    void setDelaySend(int slotIndex, float amount);
+    void setReverbSend(int slotIndex, float amount);
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
     void setReverb(bool enabled, float size, float damping, float mix);
 
@@ -92,12 +118,56 @@ private:
         std::atomic<float> sustainLevel { 1.0f };
         std::atomic<double> releaseSeconds { 0.0 };
         std::atomic<bool> envelopeCycle { true };
+        std::atomic<int> instrumentRootNote { 60 };
+        std::atomic<InstrumentMode> instrumentMode { InstrumentMode::gate };
+        std::atomic<double> instrumentAttack { 0.01 };
+        std::atomic<double> instrumentDecay { 0.1 };
+        std::atomic<float> instrumentSustain { 1.0f };
+        std::atomic<double> instrumentRelease { 0.15 };
         std::atomic<double> playheadNormalised { 0.0 };
         std::atomic<bool> playing { false };
         EnvelopeStage envelopeStage = EnvelopeStage::idle;
         float envelopeLevel = 0.0f;
         float releaseStep = 0.0f;
         double playhead = 0.0;
+    };
+
+    struct InstrumentVoice
+    {
+        std::shared_ptr<const Clip> clip;
+        bool active = false;
+        bool releasing = false;
+        bool reversed = false;
+        int slotIndex = 0;
+        int midiNote = 60;
+        InstrumentMode mode = InstrumentMode::gate;
+        double playhead = 0.0;
+        double startSample = 0.0;
+        double endSample = 1.0;
+        double increment = 1.0;
+        float gain = 1.0f;
+        double attack = 0.02;
+        double decay = 0.1;
+        float sustain = 1.0f;
+        double release = 0.0;
+        EnvelopeStage envelopeStage = EnvelopeStage::idle;
+        float envelopeLevel = 0.0f;
+        float releaseStep = 0.0f;
+        uint64_t age = 0;
+    };
+
+    struct NoteCommand
+    {
+        enum class Type
+        {
+            noteOn,
+            noteOff,
+            allNotesForSlot,
+            allNotesOff
+        } type = Type::noteOn;
+        int slotIndex = 0;
+        int midiNote = 60;
+        float velocity = 1.0f;
     };
 
     static bool isValidSlot(int slotIndex);
@@ -108,11 +178,36 @@ private:
     float cycleEnvelopeLevel(const Voice& voice, double position, double startSample,
                              double endSample, double sourceSampleRate, double rate,
                              bool isReversed) const;
+    void pushNoteCommand(NoteCommand commandToPush);
+    void processNoteCommands();
+    void startInstrumentVoice(const NoteCommand& commandToStart);
+    void releaseInstrumentVoice(InstrumentVoice& instrumentVoice);
+    void renderInstrumentVoice(InstrumentVoice& instrumentVoice,
+                               float* const* outputs, int outputChannels, int numSamples);
+    float advanceInstrumentEnvelope(InstrumentVoice& instrumentVoice);
 
     juce::AudioFormatManager formatManager;
     std::array<Voice, numberOfSlots> voices;
+    std::array<InstrumentVoice, instrumentPolyphony> instrumentVoices;
+    static constexpr int noteCommandCapacity = 64;
+    std::array<NoteCommand, noteCommandCapacity> noteCommands;
+    juce::AbstractFifo noteCommandFifo { noteCommandCapacity };
+    uint64_t instrumentVoiceCounter = 0;
     double deviceSampleRate = 44100.0;
-    EffectsChain effectsChain;
+    std::atomic<int> activeInputChannels { 0 };
+    AudioRecorder recorder;
+    struct SlotEffects
+    {
+        EffectsChain chain;
+        std::atomic<float> delaySend { 0.15f };
+        std::atomic<float> reverbSend { 0.15f };
+    };
+    std::array<SlotEffects, numberOfSlots> slotEffects;
+    EffectsChain masterEffects;
+    std::array<juce::AudioBuffer<float>, numberOfSlots> slotEffectBuffers;
+    juce::AudioBuffer<float> masterMixBuffer;
+    juce::AudioBuffer<float> delaySendBuffer;
+    juce::AudioBuffer<float> reverbSendBuffer;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoopEngine)
 };

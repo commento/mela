@@ -67,6 +67,7 @@ void LoopEngine::stopAll()
 {
     for (auto& voice : voices)
         voice.command.store(Command::stop);
+    allNotesOff();
 }
 
 void LoopEngine::setLooping(int slotIndex, bool shouldLoop)
@@ -125,36 +126,132 @@ void LoopEngine::setEnvelopeCycle(int slotIndex, bool shouldRepeat)
         voices[static_cast<size_t>(slotIndex)].envelopeCycle.store(shouldRepeat);
 }
 
-void LoopEngine::setDistortion(bool enabled, float drive, float toneHz, float mix)
+void LoopEngine::setInstrumentRootNote(int slotIndex, int midiNote)
 {
-    effectsChain.setDistortion(enabled, drive, toneHz, mix);
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].instrumentRootNote.store(
+            juce::jlimit(0, 127, midiNote));
 }
 
-void LoopEngine::setGranular(bool enabled, float sizeMs, float densityHz,
+void LoopEngine::setInstrumentMode(int slotIndex, InstrumentMode mode)
+{
+    if (isValidSlot(slotIndex))
+        voices[static_cast<size_t>(slotIndex)].instrumentMode.store(mode);
+}
+
+void LoopEngine::setInstrumentEnvelope(int slotIndex, double attack, double decay,
+                                       float sustain, double release)
+{
+    if (! isValidSlot(slotIndex))
+        return;
+
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    voice.instrumentAttack.store(juce::jlimit(0.0, 10.0, attack));
+    voice.instrumentDecay.store(juce::jlimit(0.0, 10.0, decay));
+    voice.instrumentSustain.store(juce::jlimit(0.0f, 1.0f, sustain));
+    voice.instrumentRelease.store(juce::jlimit(0.0, 20.0, release));
+}
+
+void LoopEngine::noteOn(int slotIndex, int midiNote, float velocity)
+{
+    if (isValidSlot(slotIndex) && juce::isPositiveAndBelow(midiNote, 128))
+        pushNoteCommand({ NoteCommand::Type::noteOn, slotIndex, midiNote,
+                          juce::jlimit(0.0f, 1.0f, velocity) });
+}
+
+void LoopEngine::noteOff(int slotIndex, int midiNote)
+{
+    if (isValidSlot(slotIndex) && juce::isPositiveAndBelow(midiNote, 128))
+        pushNoteCommand({ NoteCommand::Type::noteOff, slotIndex, midiNote, 0.0f });
+}
+
+void LoopEngine::allNotesOff()
+{
+    pushNoteCommand({ NoteCommand::Type::allNotesOff, 0, 0, 0.0f });
+}
+
+void LoopEngine::allNotesOff(int slotIndex)
+{
+    if (isValidSlot(slotIndex))
+        pushNoteCommand({ NoteCommand::Type::allNotesForSlot, slotIndex, 0, 0.0f });
+}
+
+bool LoopEngine::startRecording(const juce::File& destination, juce::String& errorMessage)
+{
+    return recorder.start(destination, deviceSampleRate,
+                          activeInputChannels.load(), errorMessage);
+}
+
+juce::File LoopEngine::stopRecording()
+{
+    const auto file = recorder.getCurrentFile();
+    recorder.stop();
+    return file;
+}
+
+bool LoopEngine::isRecording() const
+{
+    return recorder.isRecording();
+}
+
+double LoopEngine::getRecordingDurationSeconds() const
+{
+    return recorder.getDurationSeconds();
+}
+
+void LoopEngine::setDistortion(int slotIndex, bool enabled,
+                               float drive, float toneHz, float mix)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setDistortion(
+            enabled, drive, toneHz, mix);
+}
+
+void LoopEngine::setGranular(int slotIndex, bool enabled, float sizeMs, float densityHz,
                              float positionMs, float pitchSemitones, float mix)
 {
-    effectsChain.setGranular(enabled, sizeMs, densityHz, positionMs, pitchSemitones, mix);
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setGranular(
+            enabled, sizeMs, densityHz, positionMs, pitchSemitones, mix);
 }
 
-void LoopEngine::setFlanger(bool enabled, float rateHz, float depth,
+void LoopEngine::setFlanger(int slotIndex, bool enabled, float rateHz, float depth,
                             float feedback, float mix)
 {
-    effectsChain.setFlanger(enabled, rateHz, depth, feedback, mix);
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setFlanger(
+            enabled, rateHz, depth, feedback, mix);
 }
 
-void LoopEngine::setChorus(bool enabled, float rateHz, float depth, float mix)
+void LoopEngine::setChorus(int slotIndex, bool enabled, float rateHz, float depth, float mix)
 {
-    effectsChain.setChorus(enabled, rateHz, depth, mix);
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setChorus(
+            enabled, rateHz, depth, mix);
+}
+
+void LoopEngine::setDelaySend(int slotIndex, float amount)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].delaySend.store(
+            juce::jlimit(0.0f, 1.0f, amount));
+}
+
+void LoopEngine::setReverbSend(int slotIndex, float amount)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].reverbSend.store(
+            juce::jlimit(0.0f, 1.0f, amount));
 }
 
 void LoopEngine::setDelay(bool enabled, float timeMs, float feedback, float mix)
 {
-    effectsChain.setDelay(enabled, timeMs, feedback, mix);
+    masterEffects.setDelay(enabled, timeMs, feedback, mix);
 }
 
 void LoopEngine::setReverb(bool enabled, float size, float damping, float mix)
 {
-    effectsChain.setReverb(enabled, size, damping, mix);
+    masterEffects.setReverb(enabled, size, damping, mix);
 }
 
 bool LoopEngine::hasClip(int slotIndex) const
@@ -188,23 +285,76 @@ std::shared_ptr<const LoopEngine::Clip> LoopEngine::getClipForDisplay(int slotIn
         ? std::atomic_load(&voices[static_cast<size_t>(slotIndex)].clip) : nullptr;
 }
 
-void LoopEngine::audioDeviceIOCallbackWithContext(const float* const*, int,
+void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
+                                                   int numInputChannels,
                                                    float* const* outputChannelData,
                                                    int numOutputChannels, int numSamples,
                                                    const juce::AudioIODeviceCallbackContext&)
 {
+    recorder.process(inputChannelData, numInputChannels, numSamples);
+
     for (int channel = 0; channel < numOutputChannels; ++channel)
         if (outputChannelData[channel] != nullptr)
             juce::FloatVectorOperations::clear(outputChannelData[channel], numSamples);
 
-    for (auto& voice : voices)
-        renderVoice(voice, outputChannelData, numOutputChannels, numSamples);
+    processNoteCommands();
+    const auto channels = juce::jmin(numOutputChannels, masterMixBuffer.getNumChannels());
+    if (channels <= 0 || masterMixBuffer.getNumSamples() < numSamples)
+        return;
 
-    if (numOutputChannels > 0)
+    juce::AudioBuffer<float> mix(masterMixBuffer.getArrayOfWritePointers(),
+                                 channels, numSamples);
+    juce::AudioBuffer<float> delayBus(delaySendBuffer.getArrayOfWritePointers(),
+                                      channels, numSamples);
+    juce::AudioBuffer<float> reverbBus(reverbSendBuffer.getArrayOfWritePointers(),
+                                       channels, numSamples);
+    mix.clear();
+    delayBus.clear();
+    reverbBus.clear();
+
+    for (int slot = 0; slot < numberOfSlots; ++slot)
     {
-        juce::AudioBuffer<float> outputBuffer(outputChannelData, numOutputChannels, numSamples);
-        effectsChain.process(outputBuffer);
+        auto& storage = slotEffectBuffers[static_cast<size_t>(slot)];
+        juce::AudioBuffer<float> slotBuffer(storage.getArrayOfWritePointers(),
+                                            channels, numSamples);
+        slotBuffer.clear();
+        renderVoice(voices[static_cast<size_t>(slot)],
+                    slotBuffer.getArrayOfWritePointers(), channels, numSamples);
+        for (auto& instrumentVoice : instrumentVoices)
+            if (instrumentVoice.slotIndex == slot)
+                renderInstrumentVoice(instrumentVoice,
+                                      slotBuffer.getArrayOfWritePointers(),
+                                      channels, numSamples);
+
+        auto& effects = slotEffects[static_cast<size_t>(slot)];
+        effects.chain.processInserts(slotBuffer);
+        const auto delaySend = effects.delaySend.load();
+        const auto reverbSend = effects.reverbSend.load();
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            mix.addFrom(channel, 0, slotBuffer, channel, 0, numSamples);
+            if (delaySend > 0.0f)
+                delayBus.addFrom(channel, 0, slotBuffer, channel, 0,
+                                 numSamples, delaySend);
+            if (reverbSend > 0.0f)
+                reverbBus.addFrom(channel, 0, slotBuffer, channel, 0,
+                                  numSamples, reverbSend);
+        }
     }
+
+    masterEffects.processDelayReturn(delayBus);
+    masterEffects.processReverbReturn(reverbBus);
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        mix.addFrom(channel, 0, delayBus, channel, 0, numSamples);
+        mix.addFrom(channel, 0, reverbBus, channel, 0, numSamples);
+    }
+    masterEffects.processLimiter(mix);
+
+    for (int channel = 0; channel < channels; ++channel)
+        if (outputChannelData[channel] != nullptr)
+            juce::FloatVectorOperations::copy(outputChannelData[channel],
+                                              mix.getReadPointer(channel), numSamples);
 }
 
 void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
@@ -212,16 +362,30 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
     deviceSampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
     if (device != nullptr)
     {
-        effectsChain.prepare(deviceSampleRate, device->getCurrentBufferSizeSamples(),
-                             juce::jmax(1, device->getActiveOutputChannels().countNumberOfSetBits()));
+        activeInputChannels.store(
+            device->getActiveInputChannels().countNumberOfSetBits());
+        const auto maximumBlockSize = juce::jmax(1, device->getCurrentBufferSizeSamples());
+        const auto channels = juce::jmax(
+            1, device->getActiveOutputChannels().countNumberOfSetBits());
+        for (auto& effects : slotEffects)
+            effects.chain.prepare(deviceSampleRate, maximumBlockSize, channels);
+        masterEffects.prepare(deviceSampleRate, maximumBlockSize, channels);
+        for (auto& buffer : slotEffectBuffers)
+            buffer.setSize(channels, maximumBlockSize, false, true, false);
+        masterMixBuffer.setSize(channels, maximumBlockSize, false, true, false);
+        delaySendBuffer.setSize(channels, maximumBlockSize, false, true, false);
+        reverbSendBuffer.setSize(channels, maximumBlockSize, false, true, false);
     }
     stopAll();
 }
 
 void LoopEngine::audioDeviceStopped()
 {
+    activeInputChannels.store(0);
     stopAll();
-    effectsChain.reset();
+    for (auto& effects : slotEffects)
+        effects.chain.reset();
+    masterEffects.reset();
 }
 
 bool LoopEngine::isValidSlot(int slotIndex)
@@ -526,4 +690,290 @@ float LoopEngine::cycleEnvelopeLevel(const Voice& voice, double position,
     if (release > 0.0 && elapsed > duration - release)
         return sustain * static_cast<float>((duration - elapsed) / release);
     return sustain;
+}
+
+void LoopEngine::pushNoteCommand(NoteCommand commandToPush)
+{
+    int start1 = 0;
+    int size1 = 0;
+    int start2 = 0;
+    int size2 = 0;
+    noteCommandFifo.prepareToWrite(1, start1, size1, start2, size2);
+    if (size1 == 0)
+        return;
+
+    noteCommands[static_cast<size_t>(start1)] = commandToPush;
+    noteCommandFifo.finishedWrite(1);
+}
+
+void LoopEngine::processNoteCommands()
+{
+    int start1 = 0;
+    int size1 = 0;
+    int start2 = 0;
+    int size2 = 0;
+    noteCommandFifo.prepareToRead(noteCommandCapacity, start1, size1, start2, size2);
+
+    const auto processCommand = [this](const NoteCommand& noteCommand)
+    {
+        if (noteCommand.type == NoteCommand::Type::noteOn)
+        {
+            startInstrumentVoice(noteCommand);
+            return;
+        }
+
+        for (auto& instrumentVoice : instrumentVoices)
+        {
+            if (! instrumentVoice.active)
+                continue;
+
+            if (noteCommand.type == NoteCommand::Type::allNotesOff
+                || (noteCommand.type == NoteCommand::Type::allNotesForSlot
+                    && instrumentVoice.slotIndex == noteCommand.slotIndex)
+                || (instrumentVoice.slotIndex == noteCommand.slotIndex
+                    && instrumentVoice.midiNote == noteCommand.midiNote
+                    && instrumentVoice.mode != InstrumentMode::oneShot))
+                releaseInstrumentVoice(instrumentVoice);
+        }
+    };
+
+    for (int index = 0; index < size1; ++index)
+        processCommand(noteCommands[static_cast<size_t>(start1 + index)]);
+    for (int index = 0; index < size2; ++index)
+        processCommand(noteCommands[static_cast<size_t>(start2 + index)]);
+    noteCommandFifo.finishedRead(size1 + size2);
+}
+
+void LoopEngine::startInstrumentVoice(const NoteCommand& commandToStart)
+{
+    if (! isValidSlot(commandToStart.slotIndex))
+        return;
+
+    auto& sourceVoice = voices[static_cast<size_t>(commandToStart.slotIndex)];
+    const auto sourceClip = std::atomic_load(&sourceVoice.clip);
+    if (sourceClip == nullptr || sourceClip->audio.getNumSamples() < 2)
+        return;
+
+    auto* targetVoice = &instrumentVoices.front();
+    for (auto& candidate : instrumentVoices)
+    {
+        if (! candidate.active)
+        {
+            targetVoice = &candidate;
+            break;
+        }
+        if (candidate.age < targetVoice->age)
+            targetVoice = &candidate;
+    }
+
+    const auto sourceLength = sourceClip->audio.getNumSamples();
+    targetVoice->clip = sourceClip;
+    targetVoice->active = true;
+    targetVoice->releasing = false;
+    targetVoice->reversed = sourceVoice.reverse.load();
+    targetVoice->slotIndex = commandToStart.slotIndex;
+    targetVoice->midiNote = commandToStart.midiNote;
+    targetVoice->mode = sourceVoice.instrumentMode.load();
+    targetVoice->startSample = sourceVoice.trimStart.load() * (sourceLength - 1.0);
+    targetVoice->endSample = juce::jmax(targetVoice->startSample + 1.0,
+                                        sourceVoice.trimEnd.load() * sourceLength);
+    targetVoice->playhead = targetVoice->reversed
+        ? targetVoice->endSample - 0.0001 : targetVoice->startSample;
+
+    const auto semitones = commandToStart.midiNote
+                         - sourceVoice.instrumentRootNote.load();
+    const auto pitchRatio = std::pow(2.0, static_cast<double>(semitones) / 12.0);
+    const auto incrementMagnitude = sourceClip->sourceSampleRate / deviceSampleRate
+                                  * sourceVoice.playbackRate.load() * pitchRatio;
+    targetVoice->increment = targetVoice->reversed ? -incrementMagnitude : incrementMagnitude;
+    targetVoice->gain = sourceVoice.gain.load() * commandToStart.velocity;
+    targetVoice->attack = sourceVoice.instrumentAttack.load();
+    targetVoice->decay = sourceVoice.instrumentDecay.load();
+    targetVoice->sustain = sourceVoice.instrumentSustain.load();
+    targetVoice->release = sourceVoice.instrumentRelease.load();
+    targetVoice->envelopeStage = EnvelopeStage::attack;
+    targetVoice->envelopeLevel = 0.0f;
+    targetVoice->releaseStep = 0.0f;
+    targetVoice->age = ++instrumentVoiceCounter;
+}
+
+void LoopEngine::releaseInstrumentVoice(InstrumentVoice& instrumentVoice)
+{
+    if (! instrumentVoice.active || instrumentVoice.releasing)
+        return;
+
+    if (instrumentVoice.release <= 0.0 || instrumentVoice.envelopeLevel <= 0.0f)
+    {
+        instrumentVoice.active = false;
+        instrumentVoice.clip.reset();
+        return;
+    }
+
+    instrumentVoice.releasing = true;
+    instrumentVoice.releaseStep = instrumentVoice.envelopeLevel
+        / static_cast<float>(juce::jmax(1.0, instrumentVoice.release * deviceSampleRate));
+    instrumentVoice.envelopeStage = EnvelopeStage::release;
+}
+
+void LoopEngine::renderInstrumentVoice(InstrumentVoice& instrumentVoice,
+                                       float* const* outputs, int outputChannels,
+                                       int numSamples)
+{
+    if (! instrumentVoice.active || instrumentVoice.clip == nullptr)
+        return;
+
+    const auto& sourceClip = *instrumentVoice.clip;
+    const auto sourceLength = sourceClip.audio.getNumSamples();
+    const auto sourceChannels = sourceClip.audio.getNumChannels();
+    const auto shouldLoop = instrumentVoice.mode == InstrumentMode::loop
+                         || (instrumentVoice.releasing
+                             && instrumentVoice.mode != InstrumentMode::oneShot);
+    const auto crossfadeSamples = shouldLoop
+        ? juce::jmin(sourceClip.sourceSampleRate * 0.005,
+                     (instrumentVoice.endSample - instrumentVoice.startSample) * 0.25)
+        : 0.0;
+
+    for (int frame = 0; frame < numSamples; ++frame)
+    {
+        if (instrumentVoice.mode == InstrumentMode::oneShot
+            && ! instrumentVoice.releasing && instrumentVoice.release > 0.0)
+        {
+            const auto remainingSourceSamples = instrumentVoice.reversed
+                ? instrumentVoice.playhead - instrumentVoice.startSample
+                : instrumentVoice.endSample - instrumentVoice.playhead;
+            const auto remainingOutputSamples = remainingSourceSamples
+                / juce::jmax(0.000001, std::abs(instrumentVoice.increment));
+            if (remainingOutputSamples <= instrumentVoice.release * deviceSampleRate)
+                releaseInstrumentVoice(instrumentVoice);
+        }
+
+        const auto outsideRange = instrumentVoice.reversed
+            ? instrumentVoice.playhead < instrumentVoice.startSample
+            : instrumentVoice.playhead >= instrumentVoice.endSample;
+        if (outsideRange)
+        {
+            if (! shouldLoop)
+            {
+                instrumentVoice.active = false;
+                instrumentVoice.clip.reset();
+                break;
+            }
+
+            const auto loopSpan = juce::jmax(1.0,
+                instrumentVoice.endSample - instrumentVoice.startSample - crossfadeSamples);
+            if (instrumentVoice.reversed)
+            {
+                const auto overshoot = instrumentVoice.startSample - instrumentVoice.playhead;
+                instrumentVoice.playhead = instrumentVoice.endSample - crossfadeSamples
+                                         - std::fmod(overshoot, loopSpan);
+            }
+            else
+            {
+                instrumentVoice.playhead = instrumentVoice.startSample + crossfadeSamples
+                                         + std::fmod(instrumentVoice.playhead
+                                                     - instrumentVoice.endSample, loopSpan);
+            }
+        }
+
+        const auto first = juce::jlimit(0, sourceLength - 1,
+                                        static_cast<int>(instrumentVoice.playhead));
+        const auto candidateSecond = first + 1;
+        const auto second = static_cast<double>(candidateSecond) < instrumentVoice.endSample
+            ? juce::jlimit(0, sourceLength - 1, candidateSecond)
+            : (instrumentVoice.reversed ? first
+                                        : static_cast<int>(instrumentVoice.startSample));
+        const auto alpha = static_cast<float>(instrumentVoice.playhead - first);
+
+        for (int channel = 0; channel < outputChannels; ++channel)
+        {
+            if (outputs[channel] == nullptr)
+                continue;
+            const auto sourceChannel = juce::jmin(channel, sourceChannels - 1);
+            const auto* source = sourceClip.audio.getReadPointer(sourceChannel);
+            auto sample = source[first] + alpha * (source[second] - source[first]);
+
+            const auto inCrossfade = crossfadeSamples > 0.0
+                && (instrumentVoice.reversed
+                    ? instrumentVoice.playhead <= instrumentVoice.startSample + crossfadeSamples
+                    : instrumentVoice.playhead >= instrumentVoice.endSample - crossfadeSamples);
+            if (inCrossfade)
+            {
+                const auto distance = instrumentVoice.reversed
+                    ? instrumentVoice.startSample + crossfadeSamples - instrumentVoice.playhead
+                    : instrumentVoice.playhead - (instrumentVoice.endSample - crossfadeSamples);
+                const auto fade = static_cast<float>(juce::jlimit(
+                    0.0, 1.0, distance / crossfadeSamples));
+                const auto wrappedPosition = instrumentVoice.reversed
+                    ? instrumentVoice.endSample - distance
+                    : instrumentVoice.startSample + distance;
+                const auto wrappedFirst = juce::jlimit(0, sourceLength - 1,
+                                                       static_cast<int>(wrappedPosition));
+                const auto wrappedSecond = juce::jlimit(0, sourceLength - 1, wrappedFirst + 1);
+                const auto wrappedAlpha = static_cast<float>(wrappedPosition - wrappedFirst);
+                const auto wrappedSample = source[wrappedFirst]
+                    + wrappedAlpha * (source[wrappedSecond] - source[wrappedFirst]);
+                sample = sample * (1.0f - fade) + wrappedSample * fade;
+            }
+            outputs[channel][frame] += sample * instrumentVoice.gain
+                                     * instrumentVoice.envelopeLevel;
+        }
+
+        instrumentVoice.playhead += instrumentVoice.increment;
+        advanceInstrumentEnvelope(instrumentVoice);
+        if (instrumentVoice.envelopeStage == EnvelopeStage::idle)
+        {
+            instrumentVoice.active = false;
+            instrumentVoice.clip.reset();
+            break;
+        }
+    }
+}
+
+float LoopEngine::advanceInstrumentEnvelope(InstrumentVoice& instrumentVoice)
+{
+    const auto oneSample = 1.0 / juce::jmax(1.0, deviceSampleRate);
+    switch (instrumentVoice.envelopeStage)
+    {
+        case EnvelopeStage::idle:
+            instrumentVoice.envelopeLevel = 0.0f;
+            break;
+        case EnvelopeStage::attack:
+            if (instrumentVoice.attack <= oneSample)
+            {
+                instrumentVoice.envelopeLevel = 1.0f;
+                instrumentVoice.envelopeStage = EnvelopeStage::decay;
+            }
+            else if ((instrumentVoice.envelopeLevel += static_cast<float>(
+                          oneSample / instrumentVoice.attack)) >= 1.0f)
+            {
+                instrumentVoice.envelopeLevel = 1.0f;
+                instrumentVoice.envelopeStage = EnvelopeStage::decay;
+            }
+            break;
+        case EnvelopeStage::decay:
+            if (instrumentVoice.decay <= oneSample
+                || instrumentVoice.envelopeLevel <= instrumentVoice.sustain)
+            {
+                instrumentVoice.envelopeLevel = instrumentVoice.sustain;
+                instrumentVoice.envelopeStage = EnvelopeStage::sustain;
+            }
+            else
+            {
+                instrumentVoice.envelopeLevel -= static_cast<float>(
+                    (1.0 - instrumentVoice.sustain) * oneSample / instrumentVoice.decay);
+            }
+            break;
+        case EnvelopeStage::sustain:
+            instrumentVoice.envelopeLevel = instrumentVoice.sustain;
+            break;
+        case EnvelopeStage::release:
+            instrumentVoice.envelopeLevel -= instrumentVoice.releaseStep;
+            if (instrumentVoice.envelopeLevel <= 0.0f)
+            {
+                instrumentVoice.envelopeLevel = 0.0f;
+                instrumentVoice.envelopeStage = EnvelopeStage::idle;
+            }
+            break;
+    }
+    return instrumentVoice.envelopeLevel;
 }

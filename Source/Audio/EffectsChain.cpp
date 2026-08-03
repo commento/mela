@@ -51,23 +51,8 @@ void EffectsChain::reset()
 
 void EffectsChain::process(juce::AudioBuffer<float>& buffer)
 {
-    processDistortion(buffer);
-    processGranular(buffer);
-    processFlanger(buffer);
-
-    if (chorusParameters.enabled.load())
-    {
-        chorus.setRate(chorusParameters.rateHz.load());
-        chorus.setDepth(chorusParameters.depth.load());
-        chorus.setCentreDelay(12.0f);
-        chorus.setFeedback(0.05f);
-        chorus.setMix(chorusParameters.mix.load());
-        juce::dsp::AudioBlock<float> block(buffer);
-        juce::dsp::ProcessContextReplacing<float> context(block);
-        chorus.process(context);
-    }
-
-    processDelay(buffer);
+    processInserts(buffer);
+    processDelay(buffer, false);
 
     if (reverbParameters.enabled.load())
     {
@@ -84,6 +69,58 @@ void EffectsChain::process(juce::AudioBuffer<float>& buffer)
         reverb.process(context);
     }
 
+    processLimiter(buffer);
+}
+
+void EffectsChain::processInserts(juce::AudioBuffer<float>& buffer)
+{
+    processDistortion(buffer);
+    processGranular(buffer);
+    processFlanger(buffer);
+
+    if (chorusParameters.enabled.load())
+    {
+        chorus.setRate(chorusParameters.rateHz.load());
+        chorus.setDepth(chorusParameters.depth.load());
+        chorus.setCentreDelay(12.0f);
+        chorus.setFeedback(0.05f);
+        chorus.setMix(chorusParameters.mix.load());
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        chorus.process(context);
+    }
+
+}
+
+void EffectsChain::processDelayReturn(juce::AudioBuffer<float>& buffer)
+{
+    processDelay(buffer, true);
+}
+
+void EffectsChain::processReverbReturn(juce::AudioBuffer<float>& buffer)
+{
+    if (reverbParameters.enabled.load())
+    {
+        juce::dsp::Reverb::Parameters parameters;
+        parameters.roomSize = reverbParameters.size.load();
+        parameters.damping = reverbParameters.damping.load();
+        parameters.wetLevel = reverbParameters.mix.load();
+        parameters.dryLevel = 0.0f;
+        parameters.width = 1.0f;
+        parameters.freezeMode = 0.0f;
+        reverb.setParameters(parameters);
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        reverb.process(context);
+    }
+    else
+    {
+        buffer.clear();
+    }
+}
+
+void EffectsChain::processLimiter(juce::AudioBuffer<float>& buffer)
+{
     juce::dsp::AudioBlock<float> masterBlock(buffer);
     juce::dsp::ProcessContextReplacing<float> masterContext(masterBlock);
     masterLimiter.process(masterContext);
@@ -176,13 +213,18 @@ void EffectsChain::processGranular(juce::AudioBuffer<float>& buffer)
         return;
 
     const auto enabled = granular.enabled.load();
-    if (! enabled && granularWasEnabled)
+    if (! enabled)
     {
-        for (auto& grain : grains)
-            grain.active = false;
-        samplesUntilNextGrain = 0.0;
+        if (granularWasEnabled)
+        {
+            for (auto& grain : grains)
+                grain.active = false;
+            samplesUntilNextGrain = 0.0;
+        }
+        granularWasEnabled = false;
+        return;
     }
-    granularWasEnabled = enabled;
+    granularWasEnabled = true;
 
     const auto sizeMs = granular.sizeMs.load();
     const auto density = granular.densityHz.load();
@@ -313,10 +355,14 @@ void EffectsChain::processFlanger(juce::AudioBuffer<float>& buffer)
     }
 }
 
-void EffectsChain::processDelay(juce::AudioBuffer<float>& buffer)
+void EffectsChain::processDelay(juce::AudioBuffer<float>& buffer, bool wetOnly)
 {
     if (! delay.enabled.load() || delayBuffer.getNumSamples() == 0)
+    {
+        if (wetOnly)
+            buffer.clear();
         return;
+    }
 
     smoothedDelaySamples.setTargetValue(sampleRate * delay.timeMs.load() / 1000.0);
     const auto feedback = delay.feedback.load();
@@ -341,7 +387,8 @@ void EffectsChain::processDelay(juce::AudioBuffer<float>& buffer)
                          - delayBuffer.getSample(channel, first));
             const auto dry = samples[frame];
             delayBuffer.setSample(channel, delayWritePosition, dry + delayed * feedback);
-            samples[frame] = dry + mix * (delayed - dry);
+            samples[frame] = wetOnly ? delayed * mix
+                                     : dry + mix * (delayed - dry);
         }
         delayWritePosition = (delayWritePosition + 1) % bufferLength;
     }

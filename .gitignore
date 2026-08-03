@@ -4,3 +4,4 @@
 /.vscode/
 .DS_Store
 compile_commands.json
+/wifi/mela_upload/.venv/

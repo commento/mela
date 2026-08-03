@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mela Wi-Fi Upload</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #111419; color: #f5f7f9; }
+    main { width: min(720px, calc(100% - 32px)); margin: 32px auto; }
+    h1 { color: #ffcf4a; margin-bottom: 4px; }
+    .card { background: #20252c; border-radius: 18px; padding: 20px; margin-top: 18px; }
+    input, button { min-height: 48px; border: 0; border-radius: 12px; font-size: 17px; }
+    input[type=password] { box-sizing: border-box; width: 100%; padding: 0 14px; background: #303740; color: white; }
+    input[type=file] { width: 100%; margin: 16px 0; }
+    button { padding: 0 20px; background: #3b6f91; color: white; font-weight: 700; }
+    button.danger { min-height: 36px; background: #793b3b; font-size: 14px; }
+    button:disabled { opacity: .45; }
+    #drop { border: 2px dashed #66717f; padding: 26px; border-radius: 14px; text-align: center; }
+    #drop.over { border-color: #ffcf4a; background: #292d2a; }
+    progress { width: 100%; height: 18px; margin-top: 14px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #39404a; }
+    .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .size { color: #abb4bf; white-space: nowrap; }
+    #message { min-height: 24px; color: #ffcf4a; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>MELA</h1>
+  <div>Invia sample al Raspberry Pi</div>
+  <section class="card">
+    <label for="pin">PIN mostrato nella pagina WIFI di Mela</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="000000">
+  </section>
+  <section class="card">
+    <div id="drop">
+      Trascina qui WAV, AIFF, FLAC o OGG
+      <input id="file" type="file" accept=".wav,.aif,.aiff,.flac,.ogg,audio/*">
+      <button id="upload">CARICA SAMPLE</button>
+    </div>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <div id="message"></div>
+  </section>
+  <section class="card">
+    <h2>Inbox</h2>
+    <ul id="files"><li>Inserisci il PIN per vedere i sample.</li></ul>
+  </section>
+</main>
+<script>
+  const pin = document.querySelector('#pin');
+  const input = document.querySelector('#file');
+  const upload = document.querySelector('#upload');
+  const progress = document.querySelector('#progress');
+  const message = document.querySelector('#message');
+  const list = document.querySelector('#files');
+  const drop = document.querySelector('#drop');
+  pin.value = sessionStorage.getItem('mela-pin') || '';
+
+  const headers = () => ({'X-Mela-Pin': pin.value});
+  const humanSize = bytes => bytes < 1048576
+    ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  const escapeHtml = value => value.replace(/[&<>'"]/g, char =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+
+  async function refresh() {
+    if (pin.value.length !== 6) return;
+    sessionStorage.setItem('mela-pin', pin.value);
+    const response = await fetch('/api/files', {headers: headers()});
+    if (!response.ok) { list.innerHTML = '<li>PIN non valido.</li>'; return; }
+    const data = await response.json();
+    list.innerHTML = data.files.length ? data.files.map(file => `
+      <li><span class="name">${escapeHtml(file.name)}</span><span class="size">${humanSize(file.size)}</span>
+      <button class="danger" data-name="${encodeURIComponent(file.name)}">ELIMINA</button></li>`).join('')
+      : '<li>Nessun sample caricato.</li>';
+  }
+
+  function send(file) {
+    if (!file || pin.value.length !== 6) { message.textContent = 'Scegli un file e inserisci il PIN.'; return; }
+    const form = new FormData(); form.append('file', file);
+    const request = new XMLHttpRequest();
+    request.open('POST', '/api/upload'); request.setRequestHeader('X-Mela-Pin', pin.value);
+    request.upload.onprogress = event => { if (event.lengthComputable) progress.value = event.loaded * 100 / event.total; };
+    request.onload = async () => {
+      upload.disabled = false; progress.hidden = true;
+      let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {}
+      message.textContent = request.status === 201 ? `Caricato: ${data.name}` : (data.detail || 'Upload non riuscito');
+      if (request.status === 201) { input.value = ''; await refresh(); }
+    };
+    request.onerror = () => { upload.disabled = false; progress.hidden = true; message.textContent = 'Connessione interrotta.'; };
+    upload.disabled = true; progress.hidden = false; progress.value = 0; message.textContent = 'Caricamento...'; request.send(form);
+  }
+
+  upload.onclick = () => send(input.files[0]);
+  pin.oninput = refresh;
+  drop.ondragover = event => { event.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = event => { event.preventDefault(); drop.classList.remove('over'); send(event.dataTransfer.files[0]); };
+  list.onclick = async event => {
+    const button = event.target.closest('button[data-name]'); if (!button) return;
+    const response = await fetch(`/api/files/${button.dataset.name}`, {method: 'DELETE', headers: headers()});
+    if (response.ok) refresh();
+  };
+  refresh();
+</script>
+</body>
+</html>

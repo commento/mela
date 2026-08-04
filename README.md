@@ -7,6 +7,7 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - quattro slot indipendenti e riproducibili contemporaneamente;
 - pagina AUDIO iniziale per scegliere ingresso, uscita, sample rate e buffer;
 - pagina WIFI per importare negli slot i sample ricevuti da telefono o computer;
+- eliminazione con conferma dei sample presenti nella Mela Inbox;
 - registrazione diretta nello slot attivo dal microfono integrato o da un ingresso USB;
 - registrazioni WAV a 24 bit salvate in `Musica/Mela Recordings` e caricate automaticamente;
 - ingresso non monitorato sulle casse, per evitare feedback durante la registrazione;
@@ -34,7 +35,10 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - breve crossfade al punto di loop per ridurre i click;
 - conversione della frequenza di campionamento tramite interpolazione lineare;
 - volume;
-- controlli grandi per display touch 1280×800.
+- controlli grandi per display touch 1920×1200.
+- skin cartoon originale anni '90 con palette ad alto contrasto, bordi illustrati e
+  font Luckiest Guy incorporato nell'eseguibile;
+- splash screen cartoon 1920×1200 coerente con la nuova interfaccia.
 
 I file sono caricati in RAM. Un loop stereo di 10 secondi a 48 kHz occupa circa
 3,84 MB in formato float, quindi questa strategia è appropriata per il primo
@@ -115,6 +119,43 @@ Per controllarne lo stato sul Raspberry:
 ```sh
 systemctl status mela-upload.service
 ```
+
+## Avvio kiosk su Raspberry Pi
+
+Per il dispositivo finale e' consigliato Raspberry Pi OS Lite 64 bit: Mela usa
+direttamente Xorg senza desktop environment o window manager. Dopo avere creato
+la build Release e installato il servizio Wi-Fi:
+
+```sh
+cmake -S . -B build-pi -DCMAKE_BUILD_TYPE=Release
+cmake --build build-pi --parallel 3
+sudo ./deploy/raspberry-pi/install-upload-service.sh
+sudo ./deploy/raspberry-pi/install-kiosk-service.sh
+sudo systemctl reboot
+```
+
+Lo script copia Mela in `/opt/mela/bin/Mela`, disabilita il display manager per
+il riavvio successivo e abilita `mela-kiosk.service`. Mela occupa tutto lo schermo,
+nasconde il cursore e viene riavviata automaticamente se termina. La sessione
+corrente non viene chiusa durante l'installazione; dopo il riavvio la manutenzione
+puo' essere effettuata via SSH.
+
+Comandi utili:
+
+```sh
+systemctl status mela-kiosk.service
+journalctl -u mela-kiosk.service -f
+sudo systemctl restart mela-kiosk.service
+```
+
+Per ripristinare il target e il display manager precedenti:
+
+```sh
+sudo ./deploy/raspberry-pi/restore-desktop.sh
+sudo systemctl reboot
+```
+
+Durante lo sviluppo Linux si puo' evitare il fullscreen avviando `Mela --windowed`.
 
 ## Prossimi passi
 

@@ -4,6 +4,7 @@
 
 MainComponent::MainComponent()
 {
+    setLookAndFeel(&melaLookAndFeel);
     setOpaque(true);
 
     for (auto* component : std::array<juce::Component*, 9> {
@@ -30,9 +31,9 @@ MainComponent::MainComponent()
     audioInfoLabel.setJustificationType(juce::Justification::centred);
     audioInfoLabel.setFont(juce::FontOptions(17.0f));
 
-    for (auto* component : std::array<juce::Component*, 6> {
+    for (auto* component : std::array<juce::Component*, 7> {
              &wifiInfoLabel, &wifiAddressLabel, &wifiPinLabel,
-             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton })
+             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton, &wifiDeleteButton })
         addAndMakeVisible(component);
     wifiInboxDirectory = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
                              .getChildFile("Mela Inbox");
@@ -50,6 +51,8 @@ MainComponent::MainComponent()
     wifiFileBox.setTextWhenNothingSelected("Nessun sample nella Inbox");
     wifiFileBox.setTextWhenNoChoicesAvailable("Nessun sample nella Inbox");
     wifiRefreshButton.onClick = [this] { refreshWifiLibrary(true); };
+    wifiDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    wifiDeleteButton.onClick = [this] { deleteSelectedWifiSample(); };
 
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {
@@ -59,9 +62,9 @@ MainComponent::MainComponent()
         addAndMakeVisible(button);
     }
 
-    for (auto* component : std::array<juce::Component*, 16> {
+    for (auto* component : std::array<juce::Component*, 14> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
-             &rootDownButton, &rootUpButton, &rootNoteLabel,
+             &rootNoteLabel,
              &instrumentModeLabel, &instrumentModeBox,
              &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider,
              &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel })
@@ -98,10 +101,10 @@ MainComponent::MainComponent()
     clipName.setJustificationType(juce::Justification::centredLeft);
     clipName.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
-    playButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff267a4a));
-    stopButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffa96736));
-    stopAllButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffa93636));
-    recordButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffa93636));
+    playButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
+    stopButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    stopAllButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral.darker(0.15f));
+    recordButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
     playButton.onClick = [this] { engine.play(activeSlot); };
     stopButton.onClick = [this]
     {
@@ -224,18 +227,6 @@ MainComponent::MainComponent()
         settings.keyboardBaseNote = juce::jlimit(0, 104, settings.keyboardBaseNote + 12);
         touchKeyboard.setBaseMidiNote(settings.keyboardBaseNote);
     };
-    rootDownButton.onClick = [this]
-    {
-        auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
-        settings.instrumentRootNote = juce::jlimit(0, 127, settings.instrumentRootNote - 1);
-        updateInstrumentControls();
-    };
-    rootUpButton.onClick = [this]
-    {
-        auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
-        settings.instrumentRootNote = juce::jlimit(0, 127, settings.instrumentRootNote + 1);
-        updateInstrumentControls();
-    };
     instrumentModeLabel.setText("MODE", juce::dontSendNotification);
     instrumentModeLabel.setJustificationType(juce::Justification::centredRight);
     instrumentModeBox.addItem("GATE", 1);
@@ -325,13 +316,15 @@ MainComponent::~MainComponent()
         engine.stopRecording();
     deviceManager.removeAudioCallback(&engine);
     deviceManager.closeAudioDevice();
+    setLookAndFeel(nullptr);
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
 {
-    graphics.fillAll(juce::Colour(0xff111419));
-    graphics.setColour(juce::Colours::white);
-    graphics.setFont(28.0f);
+    graphics.fillAll(MelaColours::aubergine);
+    graphics.setColour(MelaColours::custard);
+    graphics.setFont(melaLookAndFeel.getTextButtonFont(audioPageButton, 64)
+                         .withHeight(30.0f));
     const auto title = currentPage == Page::audio ? "MELA - AUDIO SETUP"
                      : currentPage == Page::wifi ? "MELA - WIFI LIBRARY"
                      : currentPage == Page::loop ? "MELA - 4 LOOP EDITOR"
@@ -339,9 +332,14 @@ void MainComponent::paint(juce::Graphics& graphics)
                                                  : "MELA - EFFETTI";
     graphics.drawText(title,
                       24, 12, getWidth() - 550, 42, juce::Justification::centredLeft);
-    graphics.setColour(juce::Colour(0xff20252c));
-    graphics.fillRoundedRectangle(getLocalBounds().reduced(24).withTrimmedTop(60)
-                                      .withTrimmedBottom(82).toFloat(), 14.0f);
+    const auto panel = getLocalBounds().reduced(24).withTrimmedTop(60)
+                                      .withTrimmedBottom(82).toFloat();
+    graphics.setColour(MelaColours::ink.withAlpha(0.55f));
+    graphics.fillRoundedRectangle(panel.translated(0.0f, 5.0f), 20.0f);
+    graphics.setColour(MelaColours::panel);
+    graphics.fillRoundedRectangle(panel, 20.0f);
+    graphics.setColour(MelaColours::ink);
+    graphics.drawRoundedRectangle(panel, 20.0f, 3.0f);
 }
 
 void MainComponent::resized()
@@ -380,7 +378,8 @@ void MainComponent::resized()
         content.removeFromTop(12);
         wifiInboxLabel.setBounds(content.removeFromTop(34).reduced(8, 2));
         auto fileRow = content.removeFromTop(62);
-        wifiRefreshButton.setBounds(fileRow.removeFromRight(170).reduced(5));
+        wifiDeleteButton.setBounds(fileRow.removeFromRight(150).reduced(5));
+        wifiRefreshButton.setBounds(fileRow.removeFromRight(150).reduced(5));
         wifiFileBox.setBounds(fileRow.reduced(5, 8));
         content.removeFromTop(20);
         auto loadRow = content.removeFromTop(72);
@@ -438,9 +437,7 @@ void MainComponent::resized()
         auto controls = content.removeFromTop(70);
         octaveDownButton.setBounds(controls.removeFromLeft(105).reduced(4));
         octaveUpButton.setBounds(controls.removeFromLeft(105).reduced(4));
-        rootDownButton.setBounds(controls.removeFromLeft(105).reduced(4));
-        rootNoteLabel.setBounds(controls.removeFromLeft(170).reduced(4));
-        rootUpButton.setBounds(controls.removeFromLeft(105).reduced(4));
+        rootNoteLabel.setBounds(controls.removeFromLeft(190).reduced(4));
         instrumentModeLabel.setBounds(controls.removeFromLeft(80).reduced(2));
         instrumentModeBox.setBounds(controls.removeFromLeft(190).reduced(5, 12));
         content.removeFromTop(8);
@@ -720,6 +717,41 @@ void MainComponent::loadWifiSampleIntoSlot(int slotIndex)
                         juce::dontSendNotification);
 }
 
+void MainComponent::deleteSelectedWifiSample()
+{
+    const auto fileIndex = wifiFileBox.getSelectedId() - 1;
+    if (! juce::isPositiveAndBelow(fileIndex, static_cast<int>(wifiFiles.size())))
+    {
+        statusLabel.setText("Scegli prima un sample da eliminare",
+                            juce::dontSendNotification);
+        return;
+    }
+
+    const auto file = wifiFiles[static_cast<size_t>(fileIndex)];
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::AlertWindow::showOkCancelBox(
+        juce::MessageBoxIconType::WarningIcon,
+        "Elimina sample",
+        "Eliminare definitivamente \"" + file.getFileName()
+            + "\" dalla Mela Inbox?\nUn sample gia' caricato continuera' a suonare fino alla chiusura.",
+        "ELIMINA", "ANNULLA", this,
+        juce::ModalCallbackFunction::create([safeThis, file](int result)
+        {
+            if (result == 0 || safeThis == nullptr)
+                return;
+            if (! file.isAChildOf(safeThis->wifiInboxDirectory)
+                || file.isSymbolicLink() || ! file.deleteFile())
+            {
+                safeThis->statusLabel.setText("Impossibile eliminare " + file.getFileName(),
+                                              juce::dontSendNotification);
+                return;
+            }
+            safeThis->refreshWifiLibrary(false);
+            safeThis->statusLabel.setText("Eliminato: " + file.getFileName(),
+                                          juce::dontSendNotification);
+        }));
+}
+
 void MainComponent::timerCallback()
 {
     playButton.setButtonText(engine.isPlaying(activeSlot) ? "LOOP PLAYING..." : "PLAY LOOP");
@@ -862,8 +894,8 @@ void MainComponent::selectEffectTarget(int targetIndex)
     for (int target = 0; target <= LoopEngine::numberOfSlots; ++target)
         effectTargetButtons[static_cast<size_t>(target)].setColour(
             juce::TextButton::buttonColourId,
-            target == effectTarget ? juce::Colour(0xff3b6f91)
-                                   : juce::Colour(0xff30343b));
+            target == effectTarget ? MelaColours::sky
+                                   : MelaColours::panelDark);
     updateEffectPageVisibility();
     resized();
 }
@@ -939,9 +971,9 @@ void MainComponent::showPage(Page pageToShow)
     continueButton.setVisible(showAudio);
     if (audioDeviceSelector != nullptr)
         audioDeviceSelector->setVisible(showAudio);
-    for (auto* component : std::array<juce::Component*, 6> {
+    for (auto* component : std::array<juce::Component*, 7> {
              &wifiInfoLabel, &wifiAddressLabel, &wifiPinLabel,
-             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton })
+             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton, &wifiDeleteButton })
         component->setVisible(showWifi);
     for (auto& button : wifiLoadButtons)
         button.setVisible(showWifi);
@@ -951,9 +983,9 @@ void MainComponent::showPage(Page pageToShow)
         refreshWifiLibrary(false);
     }
     clipName.setVisible(showLoop || showKeys);
-    for (auto* component : std::array<juce::Component*, 16> {
+    for (auto* component : std::array<juce::Component*, 14> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
-             &rootDownButton, &rootUpButton, &rootNoteLabel,
+             &rootNoteLabel,
              &instrumentModeLabel, &instrumentModeBox,
              &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider,
              &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel })
@@ -967,16 +999,16 @@ void MainComponent::showPage(Page pageToShow)
     stopButton.setVisible(showTransport);
     stopAllButton.setVisible(showTransport);
     audioPageButton.setColour(juce::TextButton::buttonColourId,
-        showAudio ? juce::Colour(0xff3b6f91) : juce::Colour(0xff30343b));
+        showAudio ? MelaColours::sky : MelaColours::panelDark);
     wifiPageButton.setColour(juce::TextButton::buttonColourId,
-        showWifi ? juce::Colour(0xff3b6f91) : juce::Colour(0xff30343b));
+        showWifi ? MelaColours::sky : MelaColours::panelDark);
     loopPageButton.setColour(juce::TextButton::buttonColourId,
-        showLoop ? juce::Colour(0xff3b6f91) : juce::Colour(0xff30343b));
+        showLoop ? MelaColours::sky : MelaColours::panelDark);
     keysPageButton.setColour(juce::TextButton::buttonColourId,
-        showKeys ? juce::Colour(0xff3b6f91) : juce::Colour(0xff30343b));
+        showKeys ? MelaColours::sky : MelaColours::panelDark);
     effectsPageButton.setColour(juce::TextButton::buttonColourId,
-        currentPage == Page::effects ? juce::Colour(0xff3b6f91)
-                                     : juce::Colour(0xff30343b));
+        currentPage == Page::effects ? MelaColours::sky
+                                     : MelaColours::panelDark);
     resized();
     repaint();
 }
@@ -1012,13 +1044,16 @@ void MainComponent::updateSlotButtonColours()
 {
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {
-        auto colour = engine.hasClip(slot) ? juce::Colour(0xff365445)
-                                           : juce::Colour(0xff30343b);
+        auto colour = engine.hasClip(slot) ? MelaColours::green.darker(0.18f)
+                                           : MelaColours::panelDark;
         if (engine.isPlaying(slot))
-            colour = juce::Colour(0xff267a4a);
+            colour = MelaColours::green;
         if (slot == activeSlot)
-            colour = colour.brighter(0.35f);
+            colour = MelaColours::custard;
         sampleButtons[static_cast<size_t>(slot)].setColour(
             juce::TextButton::buttonColourId, colour);
+        sampleButtons[static_cast<size_t>(slot)].setColour(
+            juce::TextButton::textColourOffId,
+            slot == activeSlot ? MelaColours::ink : MelaColours::cream);
     }
 }

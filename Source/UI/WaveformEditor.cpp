@@ -1,4 +1,5 @@
 #include "WaveformEditor.h"
+#include "MelaLookAndFeel.h"
 
 #include <cmath>
 
@@ -49,12 +50,14 @@ void WaveformEditor::paint(juce::Graphics& graphics)
 {
     const auto bounds = getLocalBounds().toFloat();
     const auto plot = plotBounds();
-    graphics.setColour(juce::Colour(0xff171b21));
-    graphics.fillRoundedRectangle(bounds, 12.0f);
+    graphics.setColour(MelaColours::panelDark);
+    graphics.fillRoundedRectangle(bounds, 16.0f);
+    graphics.setColour(MelaColours::ink);
+    graphics.drawRoundedRectangle(bounds.reduced(1.5f), 16.0f, 3.0f);
 
     if (clip == nullptr || clip->waveformMinimum.empty())
     {
-        graphics.setColour(juce::Colours::white.withAlpha(0.55f));
+        graphics.setColour(MelaColours::cream.withAlpha(0.70f));
         graphics.setFont(22.0f);
         graphics.drawText("Carica un file audio per visualizzare la forma d'onda",
                           getLocalBounds(), juce::Justification::centred);
@@ -64,7 +67,7 @@ void WaveformEditor::paint(juce::Graphics& graphics)
     const auto centreY = plot.getCentreY();
     const auto amplitude = plot.getHeight() * 0.42f;
     const auto points = static_cast<int>(clip->waveformMinimum.size());
-    graphics.setColour(juce::Colour(0xff5ee6a8));
+    graphics.setColour(MelaColours::custard);
 
     for (int x = static_cast<int>(plot.getX()); x < static_cast<int>(plot.getRight()); ++x)
     {
@@ -81,7 +84,7 @@ void WaveformEditor::paint(juce::Graphics& graphics)
     const auto clippedStartX = juce::jlimit(plot.getX(), plot.getRight(), startX);
     const auto clippedEndX = juce::jlimit(plot.getX(), plot.getRight(), endX);
 
-    graphics.setColour(juce::Colour(0xcc080a0d));
+    graphics.setColour(MelaColours::ink.withAlpha(0.76f));
     graphics.fillRect(juce::Rectangle<float>::leftTopRightBottom(
         plot.getX(), plot.getY(), clippedStartX, plot.getBottom()));
     graphics.fillRect(juce::Rectangle<float>::leftTopRightBottom(
@@ -135,15 +138,15 @@ void WaveformEditor::paint(juce::Graphics& graphics)
 
         graphics.saveState();
         graphics.reduceClipRegion(plot.toNearestInt());
-        graphics.setColour(juce::Colour(0x225ea8ff));
+        graphics.setColour(MelaColours::coral.withAlpha(0.16f));
         graphics.fillPath(envelopeFill);
-        graphics.setColour(juce::Colour(0xff70a7ff));
+        graphics.setColour(MelaColours::coral);
         graphics.strokePath(envelopePath, juce::PathStrokeType(3.0f));
         graphics.restoreState();
     }
 
     constexpr auto handleWidth = 6.0f;
-    graphics.setColour(juce::Colour(0xffffc857));
+    graphics.setColour(MelaColours::sky);
     if (trimStart >= viewStart && trimStart <= viewEnd)
         graphics.fillRect(startX, plot.getY(), handleWidth, plot.getHeight());
     if (trimEnd >= viewStart && trimEnd <= viewEnd)
@@ -152,7 +155,7 @@ void WaveformEditor::paint(juce::Graphics& graphics)
     if (playhead >= viewStart && playhead <= viewEnd
         && playhead >= trimStart && playhead <= trimEnd)
     {
-        graphics.setColour(juce::Colours::white.withAlpha(0.9f));
+        graphics.setColour(MelaColours::cream.withAlpha(0.9f));
         graphics.fillRect(normalisedToX(playhead), plot.getY(), 2.0f, plot.getHeight());
     }
 
@@ -160,14 +163,14 @@ void WaveformEditor::paint(juce::Graphics& graphics)
     const auto timeLabel = juce::String(trimStart * duration, 2) + " s  -  "
                          + juce::String(trimEnd * duration, 2) + " s";
     auto labelArea = getLocalBounds().removeFromBottom(34);
-    graphics.setColour(juce::Colour(0xdd111419));
+    graphics.setColour(MelaColours::ink.withAlpha(0.88f));
     graphics.fillRoundedRectangle(labelArea.toFloat().reduced(8.0f, 3.0f), 6.0f);
-    graphics.setColour(juce::Colours::white);
+    graphics.setColour(MelaColours::cream);
     graphics.setFont(17.0f);
     graphics.drawText(timeLabel, labelArea, juce::Justification::centred);
 
     const auto zoom = 1.0 / (viewEnd - viewStart);
-    graphics.setColour(juce::Colours::white.withAlpha(0.7f));
+    graphics.setColour(MelaColours::cream.withAlpha(0.7f));
     graphics.setFont(14.0f);
     graphics.drawText("PINCH PER ZOOM  -  " + juce::String(zoom, 1) + "x",
                       getLocalBounds().reduced(16).removeFromTop(24),

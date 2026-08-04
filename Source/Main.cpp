@@ -8,13 +8,26 @@ public:
     const juce::String getApplicationVersion() override { return "0.1.0"; }
     bool moreThanOneInstanceAllowed() override          { return false; }
 
-    void initialise(const juce::String&) override
+    void initialise(const juce::String& commandLine) override
     {
-        mainWindow = std::make_unique<MainWindow>(getApplicationName());
+        mainWindow = std::make_unique<MainWindow>(
+            getApplicationName(), ! commandLine.contains("--windowed"));
+
+        const auto splashImage = juce::ImageFileFormat::loadFrom(
+            BinaryData::mela_splash_cartoon_png,
+            static_cast<size_t>(BinaryData::mela_splash_cartoon_pngSize));
+        if (splashImage.isValid())
+        {
+            splashScreen = new juce::SplashScreen("Mela", splashImage, false);
+            splashScreen->deleteAfterDelay(juce::RelativeTime::seconds(2.5), false);
+        }
     }
 
     void shutdown() override
     {
+       #if JUCE_LINUX
+        juce::Desktop::getInstance().setKioskModeComponent(nullptr);
+       #endif
         mainWindow.reset();
     }
 
@@ -27,16 +40,33 @@ private:
     class MainWindow final : public juce::DocumentWindow
     {
     public:
-        explicit MainWindow(const juce::String& name)
+        MainWindow(const juce::String& name, bool useKioskMode)
             : DocumentWindow(name,
-                             juce::Colour(0xff111419),
+                             MelaColours::aubergine,
+                            #if JUCE_LINUX
+                             useKioskMode ? 0 : DocumentWindow::allButtons)
+                            #else
                              DocumentWindow::allButtons)
+                            #endif
         {
+           #if JUCE_LINUX
+            setUsingNativeTitleBar(! useKioskMode);
+           #else
             setUsingNativeTitleBar(true);
+           #endif
             setContentOwned(new MainComponent(), true);
-            setResizable(true, true);
+            setResizable(! useKioskMode, ! useKioskMode);
             centreWithSize(getWidth(), getHeight());
             setVisible(true);
+           #if JUCE_LINUX
+            if (useKioskMode)
+            {
+                setMouseCursor(juce::MouseCursor(juce::MouseCursor::NoCursor));
+                juce::Desktop::getInstance().setKioskModeComponent(this, false);
+            }
+           #else
+            juce::ignoreUnused(useKioskMode);
+           #endif
         }
 
         void closeButtonPressed() override
@@ -46,6 +76,7 @@ private:
     };
 
     std::unique_ptr<MainWindow> mainWindow;
+    juce::SplashScreen* splashScreen = nullptr;
 };
 
 START_JUCE_APPLICATION(MelaApplication)

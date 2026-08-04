@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "Audio/LoopEngine.h"
 #include "UI/EffectPanel.h"
+#include "UI/MelaLookAndFeel.h"
 #include "UI/TouchKeyboard.h"
 #include "UI/WaveformEditor.h"
 #include <array>
@@ -78,6 +79,7 @@ private:
     void initialiseAudio(bool microphonePermissionGranted);
     void refreshWifiLibrary(bool announceResult);
     void loadWifiSampleIntoSlot(int slotIndex);
+    void deleteSelectedWifiSample();
     void timerCallback() override;
     void updateEnvelope();
     void updateEffects();
@@ -89,6 +91,7 @@ private:
     void updateInstrumentControls();
     void updateKeyboardEnvelope();
 
+    MelaLookAndFeel melaLookAndFeel;
     juce::AudioDeviceManager deviceManager;
     LoopEngine engine;
     Page currentPage = Page::audio;
@@ -117,8 +120,6 @@ private:
     juce::ToggleButton envelopeCycleButton { "ADSR CICLICO" };
     juce::TextButton octaveDownButton { "OCT -" };
     juce::TextButton octaveUpButton { "OCT +" };
-    juce::TextButton rootDownButton { "ROOT -" };
-    juce::TextButton rootUpButton { "ROOT +" };
     juce::Label rootNoteLabel;
     juce::Label instrumentModeLabel;
     juce::ComboBox instrumentModeBox;
@@ -154,6 +155,7 @@ private:
     juce::Label wifiInboxLabel;
     juce::ComboBox wifiFileBox;
     juce::TextButton wifiRefreshButton { "AGGIORNA" };
+    juce::TextButton wifiDeleteButton { "ELIMINA" };
     std::array<juce::TextButton, LoopEngine::numberOfSlots> wifiLoadButtons;
     std::vector<juce::File> wifiFiles;
     juce::File wifiInboxDirectory;

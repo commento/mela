@@ -1,4 +1,5 @@
 #include "EffectPanel.h"
+#include "MelaLookAndFeel.h"
 
 void EffectPanel::configure(const juce::String& effectName,
                             std::initializer_list<Parameter> newParameters)
@@ -68,12 +69,11 @@ void EffectPanel::setValue(int parameterIndex, double newValue)
 
 void EffectPanel::paint(juce::Graphics& graphics)
 {
-    const auto colour = isEnabled() ? juce::Colour(0xff303d49) : juce::Colour(0xff252a31);
+    const auto colour = isEnabled() ? MelaColours::panel : MelaColours::panelDark;
     graphics.setColour(colour);
-    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 12.0f);
-    graphics.setColour(isEnabled() ? juce::Colour(0xff5ee6a8)
-                                   : juce::Colours::white.withAlpha(0.15f));
-    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 12.0f, 2.0f);
+    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 16.0f);
+    graphics.setColour(isEnabled() ? MelaColours::custard : MelaColours::ink);
+    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.5f), 16.0f, 3.0f);
 }
 
 void EffectPanel::resized()

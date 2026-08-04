@@ -1,4 +1,5 @@
 #include "TouchKeyboard.h"
+#include "MelaLookAndFeel.h"
 
 #include <algorithm>
 
@@ -35,11 +36,11 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
         const auto note = baseMidiNote + whiteOffsets[static_cast<size_t>(index)];
         const auto key = juce::Rectangle<float>(static_cast<float>(index) * whiteWidth, 0.0f,
                                                 whiteWidth, bounds.getHeight());
-        graphics.setColour(isNoteActive(note) ? juce::Colour(0xff70a7ff)
-                                              : juce::Colour(0xffeceff3));
-        graphics.fillRect(key.reduced(1.0f));
-        graphics.setColour(juce::Colour(0xff22262c));
-        graphics.drawRect(key, 1.0f);
+        graphics.setColour(isNoteActive(note) ? MelaColours::custard
+                                              : MelaColours::cream);
+        graphics.fillRoundedRectangle(key.reduced(2.0f), 7.0f);
+        graphics.setColour(MelaColours::ink);
+        graphics.drawRoundedRectangle(key.reduced(2.0f), 7.0f, 2.5f);
 
         if (note % 12 == 0)
         {
@@ -59,11 +60,11 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
             blackBoundaries[static_cast<size_t>(index)]) * whiteWidth;
         const auto key = juce::Rectangle<float>(centre - blackWidth * 0.5f, 0.0f,
                                                 blackWidth, blackHeight);
-        graphics.setColour(isNoteActive(note) ? juce::Colour(0xff4f82d8)
-                                              : juce::Colour(0xff171a1f));
+        graphics.setColour(isNoteActive(note) ? MelaColours::coral
+                                              : MelaColours::panelDark);
         graphics.fillRoundedRectangle(key, 4.0f);
-        graphics.setColour(juce::Colours::black.withAlpha(0.7f));
-        graphics.drawRoundedRectangle(key, 4.0f, 1.0f);
+        graphics.setColour(MelaColours::ink);
+        graphics.drawRoundedRectangle(key, 5.0f, 2.5f);
     }
 }
 

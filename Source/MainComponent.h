@@ -26,7 +26,8 @@ private:
         wifi,
         loop,
         keys,
-        effects
+        effects,
+        scenes
     };
 
     struct SlotSettings
@@ -74,6 +75,8 @@ private:
     };
 
     void chooseFile();
+    void deleteActiveSample();
+    void clearActiveSlotAfterDelete();
     void toggleRecording();
     void stopAndLoadRecording();
     void initialiseAudio(bool microphonePermissionGranted);
@@ -90,6 +93,18 @@ private:
     void updateSlotButtonColours();
     void updateInstrumentControls();
     void updateKeyboardEnvelope();
+    juce::var createSceneState(const juce::String& sceneName) const;
+    bool restoreSceneState(const juce::var& state, juce::String& errorMessage);
+    void applyAllSettingsToEngine();
+    void selectScene(int sceneIndex);
+    void saveSelectedScene(bool askBeforeOverwrite);
+    void loadSelectedScene();
+    void renameSelectedScene();
+    void deleteSelectedScene();
+    void refreshSceneButtons();
+    void saveAutosaveIfChanged();
+    juce::File sceneFile(int sceneIndex) const;
+    bool writeSceneFile(const juce::File& file, const juce::var& state) const;
 
     MelaLookAndFeel melaLookAndFeel;
     juce::AudioDeviceManager deviceManager;
@@ -99,6 +114,8 @@ private:
     int recordingSlot = -1;
     std::array<SlotSettings, LoopEngine::numberOfSlots> slotSettings;
     std::array<SlotEffectSettings, LoopEngine::numberOfSlots> slotEffectSettings;
+    std::array<juce::File, LoopEngine::numberOfSlots> slotSourceFiles;
+    std::array<bool, LoopEngine::numberOfSlots> slotSourceIsRecording {};
     MasterEffectSettings masterEffectSettings;
     int effectTarget = 0;
 
@@ -106,6 +123,7 @@ private:
     TouchKeyboard touchKeyboard;
     std::array<juce::TextButton, LoopEngine::numberOfSlots> sampleButtons;
     juce::TextButton loadButton { "CARICA LOOP" };
+    juce::TextButton deleteSampleButton { "ELIMINA SAMPLE" };
     juce::TextButton recordButton { "REC" };
     juce::TextButton playButton { "PLAY LOOP" };
     juce::TextButton stopButton { "STOP SLOT" };
@@ -115,6 +133,7 @@ private:
     juce::TextButton loopPageButton { "LOOP" };
     juce::TextButton keysPageButton { "KEYS" };
     juce::TextButton effectsPageButton { "FX" };
+    juce::TextButton scenesPageButton { "SCENE" };
     juce::ToggleButton loopButton { "RIPETI" };
     juce::ToggleButton reverseButton { "REVERSE" };
     juce::ToggleButton envelopeCycleButton { "ADSR CICLICO" };
@@ -160,6 +179,18 @@ private:
     std::vector<juce::File> wifiFiles;
     juce::File wifiInboxDirectory;
     int wifiRefreshTicks = 0;
+
+    static constexpr int numberOfScenes = 8;
+    std::array<juce::TextButton, numberOfScenes> sceneButtons;
+    juce::TextButton sceneRecallButton { "RICHIAMA" };
+    juce::TextButton sceneSaveButton { "SALVA / SOVRASCRIVI" };
+    juce::TextButton sceneRenameButton { "RINOMINA" };
+    juce::TextButton sceneDeleteButton { "ELIMINA" };
+    juce::Label sceneInfoLabel;
+    juce::File scenesDirectory;
+    int selectedScene = 0;
+    int autosaveTicks = 0;
+    juce::String lastAutosaveState;
 
     EffectPanel distortionPanel;
     EffectPanel granularPanel;

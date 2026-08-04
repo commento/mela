@@ -7,15 +7,15 @@ MainComponent::MainComponent()
     setLookAndFeel(&melaLookAndFeel);
     setOpaque(true);
 
-    for (auto* component : std::array<juce::Component*, 9> {
+    for (auto* component : std::array<juce::Component*, 10> {
              &playButton, &stopButton, &stopAllButton,
              &audioPageButton, &wifiPageButton, &loopPageButton,
-             &keysPageButton, &effectsPageButton,
+             &keysPageButton, &effectsPageButton, &scenesPageButton,
              &statusLabel })
         addAndMakeVisible(component);
 
-    for (auto* component : std::array<juce::Component*, 19> {
-             &waveform, &loadButton, &recordButton,
+    for (auto* component : std::array<juce::Component*, 20> {
+             &waveform, &loadButton, &deleteSampleButton, &recordButton,
              &loopButton, &reverseButton, &envelopeCycleButton,
              &speedSlider, &gainSlider, &attackSlider, &decaySlider,
              &sustainSlider, &releaseSlider, &speedLabel, &gainLabel,
@@ -62,6 +62,27 @@ MainComponent::MainComponent()
         addAndMakeVisible(button);
     }
 
+    scenesDirectory = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("Mela/Scenes");
+    scenesDirectory.createDirectory();
+    for (int scene = 0; scene < numberOfScenes; ++scene)
+    {
+        auto& button = sceneButtons[static_cast<size_t>(scene)];
+        button.onClick = [this, scene] { selectScene(scene); };
+        addAndMakeVisible(button);
+    }
+    for (auto* component : std::array<juce::Component*, 5> {
+             &sceneRecallButton, &sceneSaveButton, &sceneRenameButton,
+             &sceneDeleteButton, &sceneInfoLabel })
+        addAndMakeVisible(component);
+    sceneInfoLabel.setJustificationType(juce::Justification::centred);
+    sceneRecallButton.onClick = [this] { loadSelectedScene(); };
+    sceneSaveButton.onClick = [this] { saveSelectedScene(true); };
+    sceneRenameButton.onClick = [this] { renameSelectedScene(); };
+    sceneDeleteButton.onClick = [this] { deleteSelectedScene(); };
+    sceneSaveButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
+    sceneDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+
     for (auto* component : std::array<juce::Component*, 14> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
              &rootNoteLabel,
@@ -105,6 +126,8 @@ MainComponent::MainComponent()
     stopButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
     stopAllButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral.darker(0.15f));
     recordButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    deleteSampleButton.setColour(juce::TextButton::buttonColourId,
+                                 MelaColours::coral.darker(0.18f));
     playButton.onClick = [this] { engine.play(activeSlot); };
     stopButton.onClick = [this]
     {
@@ -119,12 +142,14 @@ MainComponent::MainComponent()
         engine.stopAll();
     };
     loadButton.onClick = [this] { chooseFile(); };
+    deleteSampleButton.onClick = [this] { deleteActiveSample(); };
     recordButton.onClick = [this] { toggleRecording(); };
     audioPageButton.onClick = [this] { showPage(Page::audio); };
     wifiPageButton.onClick = [this] { showPage(Page::wifi); };
     loopPageButton.onClick = [this] { showPage(Page::loop); };
     keysPageButton.onClick = [this] { showPage(Page::keys); };
     effectsPageButton.onClick = [this] { showPage(Page::effects); };
+    scenesPageButton.onClick = [this] { showPage(Page::scenes); };
     continueButton.onClick = [this] { showPage(Page::loop); };
 
     loopButton.onClick = [this]
@@ -297,6 +322,15 @@ MainComponent::MainComponent()
     setSize(1280, 800);
     selectSlot(0);
     refreshWifiLibrary(false);
+    refreshSceneButtons();
+    const auto autosaveFile = scenesDirectory.getChildFile("autosave.json");
+    if (autosaveFile.existsAsFile())
+    {
+        juce::String restoreError;
+        const auto restoredState = juce::JSON::parse(autosaveFile);
+        restoreSceneState(restoredState, restoreError);
+        lastAutosaveState = juce::JSON::toString(createSceneState("Autosave"), true);
+    }
     showPage(Page::audio);
     startTimerHz(20);
 
@@ -312,6 +346,7 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    saveAutosaveIfChanged();
     if (engine.isRecording())
         engine.stopRecording();
     deviceManager.removeAudioCallback(&engine);
@@ -329,9 +364,10 @@ void MainComponent::paint(juce::Graphics& graphics)
                      : currentPage == Page::wifi ? "MELA - WIFI LIBRARY"
                      : currentPage == Page::loop ? "MELA - 4 LOOP EDITOR"
                      : currentPage == Page::keys ? "MELA - SAMPLE KEYS"
-                                                 : "MELA - EFFETTI";
+                     : currentPage == Page::effects ? "MELA - EFFETTI"
+                                                    : "MELA - SCENE";
     graphics.drawText(title,
-                      24, 12, getWidth() - 550, 42, juce::Justification::centredLeft);
+                      24, 12, getWidth() - 650, 42, juce::Justification::centredLeft);
     const auto panel = getLocalBounds().reduced(24).withTrimmedTop(60)
                                       .withTrimmedBottom(82).toFloat();
     graphics.setColour(MelaColours::ink.withAlpha(0.55f));
@@ -346,6 +382,7 @@ void MainComponent::resized()
 {
     auto outer = getLocalBounds().reduced(24);
     auto header = outer.removeFromTop(60);
+    scenesPageButton.setBounds(header.removeFromRight(100).reduced(4));
     effectsPageButton.setBounds(header.removeFromRight(100).reduced(4));
     keysPageButton.setBounds(header.removeFromRight(100).reduced(4));
     loopPageButton.setBounds(header.removeFromRight(100).reduced(4));
@@ -353,7 +390,8 @@ void MainComponent::resized()
     audioPageButton.setBounds(header.removeFromRight(100).reduced(4));
 
     auto footer = outer.removeFromBottom(76);
-    if (currentPage != Page::audio && currentPage != Page::wifi)
+    if (currentPage != Page::audio && currentPage != Page::wifi
+        && currentPage != Page::scenes)
     {
         playButton.setBounds(footer.removeFromLeft(165).reduced(5));
         stopButton.setBounds(footer.removeFromLeft(145).reduced(5));
@@ -388,6 +426,31 @@ void MainComponent::resized()
             wifiLoadButtons[static_cast<size_t>(slot)].setBounds(
                 loadRow.removeFromLeft(buttonWidth).reduced(6));
     }
+    else if (currentPage == Page::scenes)
+    {
+        sceneInfoLabel.setBounds(content.removeFromTop(56).reduced(12, 3));
+        content.removeFromTop(8);
+        auto pads = content.removeFromTop(360);
+        const auto rowHeight = pads.getHeight() / 2;
+        for (int row = 0; row < 2; ++row)
+        {
+            auto sceneRow = pads.removeFromTop(rowHeight);
+            const auto padWidth = sceneRow.getWidth() / 4;
+            for (int column = 0; column < 4; ++column)
+            {
+                const auto scene = row * 4 + column;
+                sceneButtons[static_cast<size_t>(scene)].setBounds(
+                    sceneRow.removeFromLeft(padWidth).reduced(8));
+            }
+        }
+        content.removeFromTop(18);
+        auto actions = content.removeFromTop(74).reduced(70, 4);
+        const auto actionWidth = actions.getWidth() / 4;
+        sceneRecallButton.setBounds(actions.removeFromLeft(actionWidth).reduced(6));
+        sceneSaveButton.setBounds(actions.removeFromLeft(actionWidth).reduced(6));
+        sceneRenameButton.setBounds(actions.removeFromLeft(actionWidth).reduced(6));
+        sceneDeleteButton.setBounds(actions.reduced(6));
+    }
     else if (currentPage == Page::loop)
     {
         auto selectorRow = content.removeFromTop(44);
@@ -399,6 +462,7 @@ void MainComponent::resized()
         content.removeFromTop(5);
         auto heading = content.removeFromTop(48);
         loadButton.setBounds(heading.removeFromRight(165).reduced(4));
+        deleteSampleButton.setBounds(heading.removeFromRight(185).reduced(4));
         recordButton.setBounds(heading.removeFromRight(145).reduced(4));
         envelopeCycleButton.setBounds(heading.removeFromRight(170).reduced(5, 3));
         reverseButton.setBounds(heading.removeFromRight(130).reduced(5, 3));
@@ -513,6 +577,8 @@ void MainComponent::chooseFile()
         juce::String error;
         if (engine.loadFile(activeSlot, file, error))
         {
+            slotSourceFiles[static_cast<size_t>(activeSlot)] = file;
+            slotSourceIsRecording[static_cast<size_t>(activeSlot)] = false;
             auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
             settings.trimStart = 0.0;
             settings.trimEnd = 1.0;
@@ -527,6 +593,70 @@ void MainComponent::chooseFile()
             statusLabel.setText("Errore: " + error, juce::dontSendNotification);
         }
     });
+}
+
+void MainComponent::deleteActiveSample()
+{
+    if (! engine.hasClip(activeSlot))
+    {
+        statusLabel.setText("Lo slot e' gia' vuoto", juce::dontSendNotification);
+        return;
+    }
+
+    const auto slot = activeSlot;
+    const auto sourceFile = slotSourceFiles[static_cast<size_t>(slot)];
+    const auto isRecording = slotSourceIsRecording[static_cast<size_t>(slot)];
+    const auto fileName = sourceFile.existsAsFile()
+        ? sourceFile.getFileName() : engine.getClipName(slot);
+    const auto message = isRecording
+        ? "Svuotare SAMPLE " + juce::String(slot + 1)
+              + " e cancellare definitivamente il WAV registrato \"" + fileName + "\"?"
+        : "Svuotare SAMPLE " + juce::String(slot + 1)
+              + "?\nIl file originale non verra' cancellato.";
+
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::AlertWindow::showOkCancelBox(
+        juce::MessageBoxIconType::WarningIcon, "Elimina sample", message,
+        "ELIMINA", "ANNULLA", this,
+        juce::ModalCallbackFunction::create(
+            [safeThis, slot, sourceFile, isRecording](int result)
+            {
+                if (result == 0 || safeThis == nullptr || safeThis->activeSlot != slot)
+                    return;
+
+                if (isRecording && sourceFile.existsAsFile())
+                {
+                    const auto recordingsDirectory =
+                        juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+                            .getChildFile("Mela Recordings");
+                    if (! sourceFile.isAChildOf(recordingsDirectory)
+                        || sourceFile.isSymbolicLink() || ! sourceFile.deleteFile())
+                    {
+                        safeThis->statusLabel.setText(
+                            "Impossibile cancellare il WAV registrato",
+                            juce::dontSendNotification);
+                        return;
+                    }
+                }
+
+                safeThis->clearActiveSlotAfterDelete();
+            }));
+}
+
+void MainComponent::clearActiveSlotAfterDelete()
+{
+    const auto slot = activeSlot;
+    engine.clearSlot(slot);
+    slotSourceFiles[static_cast<size_t>(slot)] = juce::File {};
+    slotSourceIsRecording[static_cast<size_t>(slot)] = false;
+    auto& settings = slotSettings[static_cast<size_t>(slot)];
+    settings.trimStart = 0.0;
+    settings.trimEnd = 1.0;
+    waveform.setClip(nullptr);
+    clipName.setText("Nessun loop caricato", juce::dontSendNotification);
+    statusLabel.setText("Sample " + juce::String(slot + 1) + " eliminato",
+                        juce::dontSendNotification);
+    updateSlotButtonColours();
 }
 
 void MainComponent::toggleRecording()
@@ -581,6 +711,8 @@ void MainComponent::stopAndLoadRecording()
     if (! juce::isPositiveAndBelow(targetSlot, LoopEngine::numberOfSlots)
         || ! recordedFile.existsAsFile() || recordedFile.getSize() <= 44)
     {
+        if (recordedFile.existsAsFile())
+            recordedFile.deleteFile();
         statusLabel.setText("Registrazione vuota", juce::dontSendNotification);
         return;
     }
@@ -592,6 +724,9 @@ void MainComponent::stopAndLoadRecording()
                             juce::dontSendNotification);
         return;
     }
+
+    slotSourceFiles[static_cast<size_t>(targetSlot)] = recordedFile;
+    slotSourceIsRecording[static_cast<size_t>(targetSlot)] = true;
 
     auto& settings = slotSettings[static_cast<size_t>(targetSlot)];
     settings.trimStart = 0.0;
@@ -707,6 +842,9 @@ void MainComponent::loadWifiSampleIntoSlot(int slotIndex)
         return;
     }
 
+    slotSourceFiles[static_cast<size_t>(slotIndex)] = file;
+    slotSourceIsRecording[static_cast<size_t>(slotIndex)] = false;
+
     auto& settings = slotSettings[static_cast<size_t>(slotIndex)];
     settings.trimStart = 0.0;
     settings.trimEnd = 1.0;
@@ -754,6 +892,7 @@ void MainComponent::deleteSelectedWifiSample()
 
 void MainComponent::timerCallback()
 {
+    deleteSampleButton.setEnabled(engine.hasClip(activeSlot) && ! engine.isRecording());
     playButton.setButtonText(engine.isPlaying(activeSlot) ? "LOOP PLAYING..." : "PLAY LOOP");
     if (engine.isRecording())
     {
@@ -768,6 +907,11 @@ void MainComponent::timerCallback()
     {
         wifiRefreshTicks = 0;
         refreshWifiLibrary(false);
+    }
+    if (++autosaveTicks >= 100)
+    {
+        autosaveTicks = 0;
+        saveAutosaveIfChanged();
     }
     const auto cpuPercent = juce::roundToInt(deviceManager.getCpuUsage() * 100.0);
     const auto xRuns = deviceManager.getXRunCount();
@@ -960,8 +1104,9 @@ void MainComponent::showPage(Page pageToShow)
     const auto showWifi = currentPage == Page::wifi;
     const auto showLoop = currentPage == Page::loop;
     const auto showKeys = currentPage == Page::keys;
-    for (auto* component : std::array<juce::Component*, 19> {
-             &waveform, &loadButton, &recordButton,
+    const auto showScenes = currentPage == Page::scenes;
+    for (auto* component : std::array<juce::Component*, 20> {
+             &waveform, &loadButton, &deleteSampleButton, &recordButton,
              &loopButton, &reverseButton, &envelopeCycleButton,
              &speedSlider, &gainSlider, &attackSlider, &decaySlider,
              &sustainSlider, &releaseSlider, &speedLabel, &gainLabel,
@@ -992,9 +1137,15 @@ void MainComponent::showPage(Page pageToShow)
         component->setVisible(showKeys);
     for (auto& button : sampleButtons)
         button.setVisible(showLoop || showKeys);
+    for (auto& button : sceneButtons)
+        button.setVisible(showScenes);
+    for (auto* component : std::array<juce::Component*, 5> {
+             &sceneRecallButton, &sceneSaveButton, &sceneRenameButton,
+             &sceneDeleteButton, &sceneInfoLabel })
+        component->setVisible(showScenes);
     updateEffectPageVisibility();
 
-    const auto showTransport = ! showAudio && ! showWifi;
+    const auto showTransport = ! showAudio && ! showWifi && ! showScenes;
     playButton.setVisible(showTransport);
     stopButton.setVisible(showTransport);
     stopAllButton.setVisible(showTransport);
@@ -1009,6 +1160,8 @@ void MainComponent::showPage(Page pageToShow)
     effectsPageButton.setColour(juce::TextButton::buttonColourId,
         currentPage == Page::effects ? MelaColours::sky
                                      : MelaColours::panelDark);
+    scenesPageButton.setColour(juce::TextButton::buttonColourId,
+        showScenes ? MelaColours::sky : MelaColours::panelDark);
     resized();
     repaint();
 }
@@ -1056,4 +1209,434 @@ void MainComponent::updateSlotButtonColours()
             juce::TextButton::textColourOffId,
             slot == activeSlot ? MelaColours::ink : MelaColours::cream);
     }
+}
+
+juce::var MainComponent::createSceneState(const juce::String& sceneName) const
+{
+    const auto valuesToVar = [](const auto& values)
+    {
+        juce::Array<juce::var> result;
+        for (const auto value : values)
+            result.add(value);
+        return juce::var(result);
+    };
+
+    auto root = new juce::DynamicObject();
+    root->setProperty("version", 1);
+    root->setProperty("name", sceneName);
+    root->setProperty("activeSlot", activeSlot);
+
+    juce::Array<juce::var> slots;
+    for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
+    {
+        const auto index = static_cast<size_t>(slot);
+        const auto& settings = slotSettings[index];
+        const auto& effects = slotEffectSettings[index];
+        auto item = new juce::DynamicObject();
+        item->setProperty("samplePath", slotSourceFiles[index].getFullPathName());
+        item->setProperty("recordedByMela", slotSourceIsRecording[index]);
+        item->setProperty("looping", settings.looping);
+        item->setProperty("reverse", settings.reverse);
+        item->setProperty("envelopeCycle", settings.envelopeCycle);
+        item->setProperty("speed", settings.speed);
+        item->setProperty("gain", settings.gain);
+        item->setProperty("attack", settings.attack);
+        item->setProperty("decay", settings.decay);
+        item->setProperty("sustain", settings.sustain);
+        item->setProperty("release", settings.release);
+        item->setProperty("trimStart", settings.trimStart);
+        item->setProperty("trimEnd", settings.trimEnd);
+        item->setProperty("instrumentRootNote", settings.instrumentRootNote);
+        item->setProperty("keyboardBaseNote", settings.keyboardBaseNote);
+        item->setProperty("instrumentMode", static_cast<int>(settings.instrumentMode));
+        item->setProperty("keyAttack", settings.keyAttack);
+        item->setProperty("keyDecay", settings.keyDecay);
+        item->setProperty("keySustain", settings.keySustain);
+        item->setProperty("keyRelease", settings.keyRelease);
+        item->setProperty("distortionEnabled", effects.distortionEnabled);
+        item->setProperty("distortion", valuesToVar(effects.distortion));
+        item->setProperty("granularEnabled", effects.granularEnabled);
+        item->setProperty("granular", valuesToVar(effects.granular));
+        item->setProperty("flangerEnabled", effects.flangerEnabled);
+        item->setProperty("flanger", valuesToVar(effects.flanger));
+        item->setProperty("chorusEnabled", effects.chorusEnabled);
+        item->setProperty("chorus", valuesToVar(effects.chorus));
+        item->setProperty("delaySend", effects.delaySend);
+        item->setProperty("reverbSend", effects.reverbSend);
+        slots.add(juce::var(item));
+    }
+    root->setProperty("slots", juce::var(slots));
+
+    auto master = new juce::DynamicObject();
+    master->setProperty("delayEnabled", masterEffectSettings.delayEnabled);
+    master->setProperty("delay", valuesToVar(masterEffectSettings.delay));
+    master->setProperty("reverbEnabled", masterEffectSettings.reverbEnabled);
+    master->setProperty("reverb", valuesToVar(masterEffectSettings.reverb));
+    root->setProperty("master", juce::var(master));
+    return juce::var(root);
+}
+
+bool MainComponent::restoreSceneState(const juce::var& state, juce::String& errorMessage)
+{
+    auto* root = state.getDynamicObject();
+    if (root == nullptr || ! root->hasProperty("slots"))
+    {
+        errorMessage = "File scena non valido";
+        return false;
+    }
+
+    auto slotsValue = root->getProperty("slots");
+    auto* slots = slotsValue.getArray();
+    if (slots == nullptr || slots->size() != LoopEngine::numberOfSlots)
+    {
+        errorMessage = "La scena non contiene quattro slot";
+        return false;
+    }
+
+    const auto number = [](juce::DynamicObject* object, const char* key, double fallback)
+    {
+        const juce::Identifier property(key);
+        return object->hasProperty(property) ? static_cast<double>(object->getProperty(property))
+                                             : fallback;
+    };
+    const auto integer = [](juce::DynamicObject* object, const char* key, int fallback)
+    {
+        const juce::Identifier property(key);
+        return object->hasProperty(property) ? static_cast<int>(object->getProperty(property))
+                                             : fallback;
+    };
+    const auto boolean = [](juce::DynamicObject* object, const char* key, bool fallback)
+    {
+        const juce::Identifier property(key);
+        return object->hasProperty(property) ? static_cast<bool>(object->getProperty(property))
+                                             : fallback;
+    };
+    const auto readArray = [](juce::DynamicObject* object, const char* key, auto& destination)
+    {
+        auto value = object->getProperty(juce::Identifier(key));
+        if (auto* source = value.getArray())
+            for (int index = 0; index < juce::jmin(source->size(),
+                                                   static_cast<int>(destination.size())); ++index)
+                destination[static_cast<size_t>(index)] = static_cast<double>((*source)[index]);
+    };
+
+    touchKeyboard.releaseAll();
+    engine.stopAll();
+    int missingFiles = 0;
+    juce::String loadWarnings;
+    const auto recordingsDirectory =
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+            .getChildFile("Mela Recordings");
+
+    for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
+    {
+        const auto index = static_cast<size_t>(slot);
+        auto* item = (*slots)[slot].getDynamicObject();
+        if (item == nullptr)
+        {
+            errorMessage = "Dati slot non validi";
+            return false;
+        }
+
+        auto& settings = slotSettings[index];
+        settings.looping = boolean(item, "looping", settings.looping);
+        settings.reverse = boolean(item, "reverse", settings.reverse);
+        settings.envelopeCycle = boolean(item, "envelopeCycle", settings.envelopeCycle);
+        settings.speed = number(item, "speed", settings.speed);
+        settings.gain = number(item, "gain", settings.gain);
+        settings.attack = number(item, "attack", settings.attack);
+        settings.decay = number(item, "decay", settings.decay);
+        settings.sustain = number(item, "sustain", settings.sustain);
+        settings.release = number(item, "release", settings.release);
+        settings.trimStart = number(item, "trimStart", settings.trimStart);
+        settings.trimEnd = number(item, "trimEnd", settings.trimEnd);
+        settings.instrumentRootNote = integer(item, "instrumentRootNote",
+                                              settings.instrumentRootNote);
+        settings.keyboardBaseNote = integer(item, "keyboardBaseNote",
+                                             settings.keyboardBaseNote);
+        settings.instrumentMode = static_cast<LoopEngine::InstrumentMode>(
+            juce::jlimit(0, 2, integer(item, "instrumentMode", 0)));
+        settings.keyAttack = number(item, "keyAttack", settings.keyAttack);
+        settings.keyDecay = number(item, "keyDecay", settings.keyDecay);
+        settings.keySustain = number(item, "keySustain", settings.keySustain);
+        settings.keyRelease = number(item, "keyRelease", settings.keyRelease);
+
+        auto& effects = slotEffectSettings[index];
+        effects.distortionEnabled = boolean(item, "distortionEnabled", false);
+        effects.granularEnabled = boolean(item, "granularEnabled", false);
+        effects.flangerEnabled = boolean(item, "flangerEnabled", false);
+        effects.chorusEnabled = boolean(item, "chorusEnabled", false);
+        readArray(item, "distortion", effects.distortion);
+        readArray(item, "granular", effects.granular);
+        readArray(item, "flanger", effects.flanger);
+        readArray(item, "chorus", effects.chorus);
+        effects.delaySend = number(item, "delaySend", effects.delaySend);
+        effects.reverbSend = number(item, "reverbSend", effects.reverbSend);
+
+        engine.clearSlot(slot);
+        const juce::File sourceFile(item->getProperty("samplePath").toString());
+        slotSourceFiles[index] = sourceFile;
+        slotSourceIsRecording[index] = boolean(item, "recordedByMela", false)
+                                       && sourceFile.isAChildOf(recordingsDirectory);
+        if (sourceFile.getFullPathName().isNotEmpty())
+        {
+            if (sourceFile.existsAsFile())
+            {
+                juce::String loadError;
+                if (engine.loadFile(slot, sourceFile, loadError))
+                {
+                }
+                else
+                {
+                    ++missingFiles;
+                    loadWarnings << "S" << (slot + 1) << " non leggibile; ";
+                }
+            }
+            else
+            {
+                ++missingFiles;
+                loadWarnings << "S" << (slot + 1) << " mancante; ";
+            }
+        }
+    }
+
+    if (auto* master = root->getProperty("master").getDynamicObject())
+    {
+        masterEffectSettings.delayEnabled = boolean(master, "delayEnabled", false);
+        masterEffectSettings.reverbEnabled = boolean(master, "reverbEnabled", false);
+        readArray(master, "delay", masterEffectSettings.delay);
+        readArray(master, "reverb", masterEffectSettings.reverb);
+    }
+
+    applyAllSettingsToEngine();
+    activeSlot = juce::jlimit(0, LoopEngine::numberOfSlots - 1,
+                              integer(root, "activeSlot", 0));
+    selectSlot(activeSlot);
+    selectEffectTarget(juce::jlimit(0, LoopEngine::numberOfSlots, effectTarget));
+    errorMessage = missingFiles > 0 ? loadWarnings.trimEnd() : juce::String {};
+    return true;
+}
+
+void MainComponent::applyAllSettingsToEngine()
+{
+    for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
+    {
+        const auto index = static_cast<size_t>(slot);
+        const auto& settings = slotSettings[index];
+        const auto& effects = slotEffectSettings[index];
+        engine.setLooping(slot, settings.looping);
+        engine.setReverse(slot, settings.reverse);
+        engine.setGain(slot, static_cast<float>(settings.gain));
+        engine.setPlaybackRate(slot, settings.speed);
+        engine.setTrimRange(slot, settings.trimStart, settings.trimEnd);
+        engine.setEnvelope(slot, settings.attack, settings.decay,
+                           static_cast<float>(settings.sustain), settings.release);
+        engine.setEnvelopeCycle(slot, settings.envelopeCycle);
+        engine.setInstrumentRootNote(slot, settings.instrumentRootNote);
+        engine.setInstrumentMode(slot, settings.instrumentMode);
+        engine.setInstrumentEnvelope(slot, settings.keyAttack, settings.keyDecay,
+                                     static_cast<float>(settings.keySustain),
+                                     settings.keyRelease);
+        engine.setDistortion(slot, effects.distortionEnabled,
+            static_cast<float>(effects.distortion[0]), static_cast<float>(effects.distortion[1]),
+            static_cast<float>(effects.distortion[2]));
+        engine.setGranular(slot, effects.granularEnabled,
+            static_cast<float>(effects.granular[0]), static_cast<float>(effects.granular[1]),
+            static_cast<float>(effects.granular[2]), static_cast<float>(effects.granular[3]),
+            static_cast<float>(effects.granular[4]));
+        engine.setFlanger(slot, effects.flangerEnabled,
+            static_cast<float>(effects.flanger[0]), static_cast<float>(effects.flanger[1]),
+            static_cast<float>(effects.flanger[2]), static_cast<float>(effects.flanger[3]));
+        engine.setChorus(slot, effects.chorusEnabled,
+            static_cast<float>(effects.chorus[0]), static_cast<float>(effects.chorus[1]),
+            static_cast<float>(effects.chorus[2]));
+        engine.setDelaySend(slot, static_cast<float>(effects.delaySend));
+        engine.setReverbSend(slot, static_cast<float>(effects.reverbSend));
+    }
+    engine.setDelay(masterEffectSettings.delayEnabled,
+                    static_cast<float>(masterEffectSettings.delay[0]),
+                    static_cast<float>(masterEffectSettings.delay[1]),
+                    static_cast<float>(masterEffectSettings.delay[2]));
+    engine.setReverb(masterEffectSettings.reverbEnabled,
+                     static_cast<float>(masterEffectSettings.reverb[0]),
+                     static_cast<float>(masterEffectSettings.reverb[1]),
+                     static_cast<float>(masterEffectSettings.reverb[2]));
+}
+
+juce::File MainComponent::sceneFile(int sceneIndex) const
+{
+    return scenesDirectory.getChildFile("scene-" + juce::String(sceneIndex + 1) + ".json");
+}
+
+bool MainComponent::writeSceneFile(const juce::File& file, const juce::var& state) const
+{
+    juce::TemporaryFile temporary(file);
+    if (! temporary.getFile().replaceWithText(juce::JSON::toString(state, true)))
+        return false;
+    return temporary.overwriteTargetFileWithTemporary();
+}
+
+void MainComponent::selectScene(int sceneIndex)
+{
+    selectedScene = juce::jlimit(0, numberOfScenes - 1, sceneIndex);
+    refreshSceneButtons();
+}
+
+void MainComponent::saveSelectedScene(bool askBeforeOverwrite)
+{
+    const auto file = sceneFile(selectedScene);
+    if (askBeforeOverwrite && file.existsAsFile())
+    {
+        juce::Component::SafePointer<MainComponent> safeThis(this);
+        juce::AlertWindow::showOkCancelBox(
+            juce::MessageBoxIconType::QuestionIcon, "Sovrascrivi scena",
+            "Sostituire la scena " + juce::String(selectedScene + 1) + " con lo stato attuale?",
+            "SOVRASCRIVI", "ANNULLA", this,
+            juce::ModalCallbackFunction::create([safeThis](int result)
+            {
+                if (result != 0 && safeThis != nullptr)
+                    safeThis->saveSelectedScene(false);
+            }));
+        return;
+    }
+
+    juce::String name = "SCENA " + juce::String(selectedScene + 1);
+    if (file.existsAsFile())
+    {
+        const auto existingState = juce::JSON::parse(file);
+        if (auto* existing = existingState.getDynamicObject())
+            name = existing->getProperty("name").toString();
+    }
+    if (! writeSceneFile(file, createSceneState(name)))
+    {
+        statusLabel.setText("Impossibile salvare la scena", juce::dontSendNotification);
+        return;
+    }
+    refreshSceneButtons();
+    statusLabel.setText(name + " salvata", juce::dontSendNotification);
+}
+
+void MainComponent::loadSelectedScene()
+{
+    const auto file = sceneFile(selectedScene);
+    if (! file.existsAsFile())
+    {
+        statusLabel.setText("La scena selezionata e' vuota", juce::dontSendNotification);
+        return;
+    }
+    juce::String error;
+    const auto state = juce::JSON::parse(file);
+    if (! restoreSceneState(state, error))
+    {
+        statusLabel.setText(error, juce::dontSendNotification);
+        return;
+    }
+    const auto name = state.getDynamicObject()->getProperty("name").toString();
+    statusLabel.setText(error.isEmpty() ? name + " richiamata"
+                                        : name + " richiamata - " + error,
+                        juce::dontSendNotification);
+}
+
+void MainComponent::renameSelectedScene()
+{
+    const auto file = sceneFile(selectedScene);
+    if (! file.existsAsFile())
+    {
+        statusLabel.setText("Prima salva la scena", juce::dontSendNotification);
+        return;
+    }
+    auto state = juce::JSON::parse(file);
+    auto* object = state.getDynamicObject();
+    if (object == nullptr)
+        return;
+
+    auto* dialog = new juce::AlertWindow("Rinomina scena", "Inserisci il nuovo nome",
+                                         juce::MessageBoxIconType::NoIcon);
+    dialog->addTextEditor("name", object->getProperty("name").toString(), "NOME");
+    dialog->addButton("SALVA", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    dialog->addButton("ANNULLA", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    dialog->enterModalState(true,
+        juce::ModalCallbackFunction::create([safeThis, dialog, file, state](int result) mutable
+        {
+            if (result != 0 && safeThis != nullptr)
+            {
+                auto name = dialog->getTextEditorContents("name").trim().substring(0, 24);
+                if (name.isEmpty())
+                    name = "SCENA " + juce::String(safeThis->selectedScene + 1);
+                state.getDynamicObject()->setProperty("name", name);
+                if (safeThis->writeSceneFile(file, state))
+                    safeThis->statusLabel.setText("Scena rinominata: " + name,
+                                                  juce::dontSendNotification);
+                safeThis->refreshSceneButtons();
+            }
+            delete dialog;
+        }), false);
+}
+
+void MainComponent::deleteSelectedScene()
+{
+    const auto file = sceneFile(selectedScene);
+    if (! file.existsAsFile())
+        return;
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::AlertWindow::showOkCancelBox(
+        juce::MessageBoxIconType::WarningIcon, "Elimina scena",
+        "Eliminare la scena " + juce::String(selectedScene + 1)
+            + "? I sample audio non verranno cancellati.",
+        "ELIMINA", "ANNULLA", this,
+        juce::ModalCallbackFunction::create([safeThis, file](int result)
+        {
+            if (result == 0 || safeThis == nullptr)
+                return;
+            if (file.deleteFile())
+            {
+                safeThis->refreshSceneButtons();
+                safeThis->statusLabel.setText("Scena eliminata",
+                                              juce::dontSendNotification);
+            }
+        }));
+}
+
+void MainComponent::refreshSceneButtons()
+{
+    for (int scene = 0; scene < numberOfScenes; ++scene)
+    {
+        const auto file = sceneFile(scene);
+        auto name = "SCENA " + juce::String(scene + 1) + " - VUOTA";
+        if (file.existsAsFile())
+        {
+            const auto state = juce::JSON::parse(file);
+            if (auto* object = state.getDynamicObject())
+                name = object->getProperty("name").toString();
+        }
+        auto& button = sceneButtons[static_cast<size_t>(scene)];
+        button.setButtonText(name);
+        button.setColour(juce::TextButton::buttonColourId,
+                         scene == selectedScene ? MelaColours::custard
+                                                : file.existsAsFile()
+                                                    ? MelaColours::green.darker(0.18f)
+                                                    : MelaColours::panelDark);
+        button.setColour(juce::TextButton::textColourOffId,
+                         scene == selectedScene ? MelaColours::ink : MelaColours::cream);
+    }
+    const auto exists = sceneFile(selectedScene).existsAsFile();
+    sceneRecallButton.setEnabled(exists);
+    sceneRenameButton.setEnabled(exists);
+    sceneDeleteButton.setEnabled(exists);
+    sceneInfoLabel.setText(
+        "Seleziona una memoria, poi usa RICHIAMA o SALVA. I file audio restano separati.",
+        juce::dontSendNotification);
+}
+
+void MainComponent::saveAutosaveIfChanged()
+{
+    if (scenesDirectory == juce::File {})
+        return;
+    const auto state = createSceneState("Autosave");
+    const auto json = juce::JSON::toString(state, true);
+    if (json == lastAutosaveState)
+        return;
+    if (writeSceneFile(scenesDirectory.getChildFile("autosave.json"), state))
+        lastAutosaveState = json;
 }

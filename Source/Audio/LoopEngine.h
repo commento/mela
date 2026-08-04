@@ -34,6 +34,7 @@ public:
     LoopEngine();
 
     bool loadFile(int slotIndex, const juce::File& file, juce::String& errorMessage);
+    void clearSlot(int slotIndex);
     void play(int slotIndex);
     void stop(int slotIndex);
     void stopAll();

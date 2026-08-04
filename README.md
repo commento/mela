@@ -10,6 +10,8 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - eliminazione con conferma dei sample presenti nella Mela Inbox;
 - registrazione diretta nello slot attivo dal microfono integrato o da un ingresso USB;
 - registrazioni WAV a 24 bit salvate in `Musica/Mela Recordings` e caricate automaticamente;
+- pulsante `ELIMINA SAMPLE`: svuota lo slot e, per le registrazioni fatte da Mela,
+  cancella anche il relativo WAV dopo una conferma;
 - ingresso non monitorato sulle casse, per evitare feedback durante la registrazione;
 - editor contestuale per modificare un sample alla volta;
 - caricamento WAV, AIFF, FLAC e OGG (in base ai formati JUCE disponibili);
@@ -30,6 +32,9 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - bypass e mix indipendenti per ogni effetto;
 - limiter master unico per proteggere il mix finale dal clipping;
 - pagina KEYS con tastiera multitouch a due ottave e otto voci polifoniche;
+- pagina SCENE con otto snapshot rinominabili: salva i quattro sample, loop, ADSR,
+  tastiera, rack per slot ed effetti master;
+- autosave JSON ripristinato all'avvio e gestione non bloccante dei sample mancanti;
 - root note, cambio ottava e modalita Gate, One Shot o Loop per ogni sample;
 - ADSR dedicato alle note della tastiera, separato dall'inviluppo dei loop;
 - breve crossfade al punto di loop per ridurre i click;

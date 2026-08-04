@@ -51,6 +51,19 @@ bool LoopEngine::loadFile(int slotIndex, const juce::File& file, juce::String& e
     return true;
 }
 
+void LoopEngine::clearSlot(int slotIndex)
+{
+    if (! isValidSlot(slotIndex))
+        return;
+
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    voice.command.store(Command::stopImmediate);
+    voice.playing.store(false);
+    voice.playheadNormalised.store(0.0);
+    std::atomic_store(&voice.clip, std::shared_ptr<const Clip> {});
+    allNotesOff(slotIndex);
+}
+
 void LoopEngine::play(int slotIndex)
 {
     if (isValidSlot(slotIndex))

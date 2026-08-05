@@ -64,6 +64,12 @@ private:
                 setMouseCursor(juce::MouseCursor(juce::MouseCursor::NoCursor));
                 juce::Desktop::getInstance().setKioskModeComponent(this, false);
             }
+            else
+            {
+                const auto normalCursor = juce::MouseCursor(juce::MouseCursor::NormalCursor);
+                setMouseCursor(normalCursor);
+                juce::Desktop::getInstance().getMainMouseSource().showMouseCursor(normalCursor);
+            }
            #else
             juce::ignoreUnused(useKioskMode);
            #endif

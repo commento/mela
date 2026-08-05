@@ -44,6 +44,7 @@ target_compile_features(Mela PRIVATE cxx_std_17)
 target_compile_definitions(Mela PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
 )
 
 target_link_libraries(Mela PRIVATE

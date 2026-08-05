@@ -49,7 +49,9 @@ install -m 0644 "${project_root}/deploy/raspberry-pi/mela-upload.avahi.service" 
     /etc/avahi/services/mela-upload.service
 
 systemctl daemon-reload
-systemctl enable --now avahi-daemon.service mela-upload.service
+systemctl enable --now avahi-daemon.service
+systemctl enable mela-upload.service
+systemctl restart mela-upload.service
 
 echo
 echo "Mela Upload installato."

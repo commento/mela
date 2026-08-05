@@ -7,7 +7,7 @@ import unicodedata
 from pathlib import Path
 from typing import Optional, Set
 
-ALLOWED_EXTENSIONS = {".wav", ".aif", ".aiff", ".flac", ".ogg"}
+ALLOWED_EXTENSIONS = {".wav", ".aif", ".aiff", ".flac", ".ogg", ".mp3"}
 MAX_UPLOAD_BYTES = 250 * 1024 * 1024
 
 

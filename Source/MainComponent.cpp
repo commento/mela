@@ -565,7 +565,7 @@ void MainComponent::chooseFile()
 {
     fileChooser = std::make_unique<juce::FileChooser>(
         "Scegli un loop", juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        "*.wav;*.aif;*.aiff;*.flac;*.ogg");
+        "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
     fileChooser->launchAsync(juce::FileBrowserComponent::openMode
                                  | juce::FileBrowserComponent::canSelectFiles,
                              [this](const juce::FileChooser& chooser)
@@ -779,7 +779,7 @@ void MainComponent::refreshWifiLibrary(bool announceResult)
 
     const auto previouslySelected = wifiFileBox.getText();
     const auto foundFiles = wifiInboxDirectory.findChildFiles(
-        juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg");
+        juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
     wifiFiles.assign(foundFiles.begin(), foundFiles.end());
     std::sort(wifiFiles.begin(), wifiFiles.end(), [](const auto& first, const auto& second)
     {

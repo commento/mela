@@ -14,7 +14,7 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
   cancella anche il relativo WAV dopo una conferma;
 - ingresso non monitorato sulle casse, per evitare feedback durante la registrazione;
 - editor contestuale per modificare un sample alla volta;
-- caricamento WAV, AIFF, FLAC e OGG (in base ai formati JUCE disponibili);
+- caricamento WAV, AIFF, FLAC, OGG e MP3;
 - forma d'onda con maniglie touch per scegliere inizio e fine;
 - zoom con pinch a due dita, pan con trascinamento e reset con doppio tap;
 - riproduzione continua oppure singola;
@@ -112,7 +112,7 @@ sono mostrati l'indirizzo da aprire e il PIN a sei cifre. Dal telefono o dal Mac
 
 1. aprire l'indirizzo indicato, normalmente `http://nome-raspberry.local:8080`;
 2. inserire il PIN mostrato da Mela;
-3. inviare un file WAV, AIFF, FLAC o OGG;
+3. inviare un file WAV, AIFF, FLAC, OGG o MP3;
 4. scegliere il file nella `Mela Inbox` e premere `CARICA IN S1-S4`.
 
 Gli upload sono limitati a 250 MB e vengono scritti prima come file temporanei.
@@ -124,6 +124,17 @@ Per controllarne lo stato sul Raspberry:
 ```sh
 systemctl status mela-upload.service
 ```
+
+Per aggiornare un servizio gia' installato dopo avere portato sul Raspberry la
+nuova versione del progetto, rieseguire lo stesso script. I file del server e
+la unit systemd vengono aggiornati e `mela-upload.service` viene riavviato:
+
+```sh
+sudo ./deploy/raspberry-pi/install-upload-service.sh
+```
+
+Il supporto MP3 richiede anche una nuova build dell'app Mela, non soltanto
+l'aggiornamento del server di upload.
 
 ## Avvio kiosk su Raspberry Pi
 

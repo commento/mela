@@ -389,7 +389,28 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
 
 void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    const auto previousSampleRate = deviceSampleRate;
     deviceSampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
+    const auto rateCorrection = previousSampleRate / juce::jmax(1.0, deviceSampleRate);
+
+    // Keep active notes and releases at the same pitch/duration if the new
+    // device uses a different sample rate.
+    if (! juce::approximatelyEqual(rateCorrection, 1.0))
+    {
+        for (auto& voice : voices)
+            if (voice.envelopeStage == EnvelopeStage::release)
+                voice.releaseStep *= static_cast<float>(rateCorrection);
+
+        for (auto& instrumentVoice : instrumentVoices)
+        {
+            if (! instrumentVoice.active)
+                continue;
+            instrumentVoice.increment *= rateCorrection;
+            if (instrumentVoice.envelopeStage == EnvelopeStage::release)
+                instrumentVoice.releaseStep *= static_cast<float>(rateCorrection);
+        }
+    }
+
     if (device != nullptr)
     {
         activeInputChannels.store(
@@ -406,13 +427,11 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
         delaySendBuffer.setSize(channels, maximumBlockSize, false, true, false);
         reverbSendBuffer.setSize(channels, maximumBlockSize, false, true, false);
     }
-    stopAll();
 }
 
 void LoopEngine::audioDeviceStopped()
 {
     activeInputChannels.store(0);
-    stopAll();
     for (auto& effects : slotEffects)
         effects.chain.reset();
     masterEffects.reset();

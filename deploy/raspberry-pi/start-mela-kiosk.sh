@@ -27,4 +27,12 @@ else
     echo "Mela: nessun display X11 rilevato; uso la configurazione corrente." >&2
 fi
 
+# Keep the X11 pointer hidden at server level. In particular, --hide-on-touch
+# prevents multi-tap gestures from restoring Xorg's default X-shaped cursor.
+if command -v unclutter >/dev/null 2>&1; then
+    unclutter --timeout 0 --jitter 0 --hide-on-touch --start-hidden &
+else
+    echo "Mela: unclutter non disponibile; il cursore viene nascosto solo dall'app." >&2
+fi
+
 exec /opt/mela/bin/Mela "$@"

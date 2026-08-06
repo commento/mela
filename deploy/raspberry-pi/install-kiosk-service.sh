@@ -30,7 +30,7 @@ fi
 
 apt-get update
 apt-get install -y network-manager xserver-xorg-core xserver-xorg-input-libinput \
-    xinit x11-xserver-utils
+    xinit x11-xserver-utils unclutter-xfixes
 
 install -d -m 0755 /opt/mela/bin
 install -m 0755 "${mela_binary}" /opt/mela/bin/Mela

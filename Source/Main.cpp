@@ -1,7 +1,8 @@
 #include <JuceHeader.h>
 #include "MainComponent.h"
 
-class MelaApplication final : public juce::JUCEApplication
+class MelaApplication final : public juce::JUCEApplication,
+                              private juce::Timer
 {
 public:
     const juce::String getApplicationName() override    { return "Mela"; }
@@ -10,24 +11,31 @@ public:
 
     void initialise(const juce::String& commandLine) override
     {
-        mainWindow = std::make_unique<MainWindow>(
-            getApplicationName(), ! commandLine.contains("--windowed"));
+        launchInKioskMode = ! commandLine.contains("--windowed");
 
         const auto splashImage = juce::ImageFileFormat::loadFrom(
             BinaryData::mela_splash_cartoon_png,
             static_cast<size_t>(BinaryData::mela_splash_cartoon_pngSize));
         if (splashImage.isValid())
         {
-            splashScreen = new juce::SplashScreen("Mela", splashImage, false);
-            splashScreen->deleteAfterDelay(juce::RelativeTime::seconds(2.5), false);
+            // Do not create the interactive window underneath the splash. On
+            // touch-only X11 a gesture can otherwise be delivered to both
+            // top-level windows and activate a control hidden behind it.
+            splashScreen = std::make_unique<juce::SplashScreen>(
+                "Mela", splashImage, false);
+            startTimer(2500);
         }
+        else
+            showMainWindow();
     }
 
     void shutdown() override
     {
+        stopTimer();
        #if JUCE_LINUX
         juce::Desktop::getInstance().setKioskModeComponent(nullptr);
        #endif
+        splashScreen.reset();
         mainWindow.reset();
     }
 
@@ -37,6 +45,20 @@ public:
     }
 
 private:
+    void timerCallback() override
+    {
+        stopTimer();
+        splashScreen.reset();
+        showMainWindow();
+    }
+
+    void showMainWindow()
+    {
+        if (mainWindow == nullptr)
+            mainWindow = std::make_unique<MainWindow>(
+                getApplicationName(), launchInKioskMode);
+    }
+
     class MainWindow final : public juce::DocumentWindow,
                              private juce::Timer
     {
@@ -112,7 +134,8 @@ private:
     };
 
     std::unique_ptr<MainWindow> mainWindow;
-    juce::SplashScreen* splashScreen = nullptr;
+    std::unique_ptr<juce::SplashScreen> splashScreen;
+    bool launchInKioskMode = true;
 };
 
 START_JUCE_APPLICATION(MelaApplication)

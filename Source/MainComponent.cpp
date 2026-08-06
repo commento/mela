@@ -794,9 +794,20 @@ void MainComponent::resized()
 
 void MainComponent::chooseFile()
 {
+    // The Raspberry Pi kiosk runs directly under Xorg, without a desktop
+    // environment. A native chooser may therefore try to launch an external
+    // portal/application that never becomes visible. JUCE's own chooser stays
+    // inside Mela and receives taps like the rest of the interface.
+   #if JUCE_LINUX
+    constexpr bool useNativeFileChooser = false;
+   #else
+    constexpr bool useNativeFileChooser = true;
+   #endif
+
+    wifiInboxDirectory.createDirectory();
     fileChooser = std::make_unique<juce::FileChooser>(
-        "Scegli un loop", juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+        "Scegli un sample dalla Mela Inbox", wifiInboxDirectory,
+        "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3", useNativeFileChooser);
     fileChooser->launchAsync(juce::FileBrowserComponent::openMode
                                  | juce::FileBrowserComponent::canSelectFiles,
                              [this](const juce::FileChooser& chooser)

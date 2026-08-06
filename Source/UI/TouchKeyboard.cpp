@@ -38,15 +38,15 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
                                                 whiteWidth, bounds.getHeight());
         graphics.setColour(isNoteActive(note) ? MelaColours::custard
                                               : MelaColours::cream);
-        graphics.fillRoundedRectangle(key.reduced(2.0f), 7.0f);
+        graphics.fillRoundedRectangle(key.reduced(3.0f), 10.5f);
         graphics.setColour(MelaColours::ink);
-        graphics.drawRoundedRectangle(key.reduced(2.0f), 7.0f, 2.5f);
+        graphics.drawRoundedRectangle(key.reduced(3.0f), 10.5f, 3.75f);
 
         if (note % 12 == 0)
         {
-            graphics.setFont(14.0f);
+            graphics.setFont(21.0f);
             graphics.drawText(juce::MidiMessage::getMidiNoteName(note, true, true, 4),
-                              key.toNearestInt().removeFromBottom(28),
+                              key.toNearestInt().removeFromBottom(42),
                               juce::Justification::centred);
         }
     }
@@ -62,9 +62,9 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
                                                 blackWidth, blackHeight);
         graphics.setColour(isNoteActive(note) ? MelaColours::coral
                                               : MelaColours::panelDark);
-        graphics.fillRoundedRectangle(key, 4.0f);
+        graphics.fillRoundedRectangle(key, 6.0f);
         graphics.setColour(MelaColours::ink);
-        graphics.drawRoundedRectangle(key, 5.0f, 2.5f);
+        graphics.drawRoundedRectangle(key, 7.5f, 3.75f);
     }
 }
 

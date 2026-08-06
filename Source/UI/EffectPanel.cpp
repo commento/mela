@@ -28,7 +28,7 @@ void EffectPanel::configure(const juce::String& effectName,
         label.setText(parameter->name, juce::dontSendNotification);
         label.setJustificationType(juce::Justification::centred);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 23);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 123, 35);
         slider.setMouseDragSensitivity(300);
         slider.setRange(parameter->minimum, parameter->maximum, parameter->step);
         slider.setValue(parameter->defaultValue, juce::dontSendNotification);
@@ -71,18 +71,18 @@ void EffectPanel::paint(juce::Graphics& graphics)
 {
     const auto colour = isEnabled() ? MelaColours::panel : MelaColours::panelDark;
     graphics.setColour(colour);
-    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 16.0f);
+    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 24.0f);
     graphics.setColour(isEnabled() ? MelaColours::custard : MelaColours::ink);
-    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.5f), 16.0f, 3.0f);
+    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(2.25f), 24.0f, 4.5f);
 }
 
 void EffectPanel::resized()
 {
-    auto area = getLocalBounds().reduced(12);
-    auto heading = area.removeFromTop(32);
-    enabledButton.setBounds(heading.removeFromRight(65));
+    auto area = getLocalBounds().reduced(18);
+    auto heading = area.removeFromTop(48);
+    enabledButton.setBounds(heading.removeFromRight(98));
     titleLabel.setBounds(heading);
-    area.removeFromTop(5);
+    area.removeFromTop(8);
 
     const auto columns = parameterCount <= 2 ? parameterCount
                        : parameterCount <= 4 ? 2 : 3;
@@ -100,8 +100,8 @@ void EffectPanel::resized()
                         .withTrimmedTop(row * cellHeight)
                         .withWidth(cellWidth)
                         .withHeight(cellHeight)
-                        .reduced(4);
-        labels[static_cast<size_t>(index)].setBounds(cell.removeFromTop(20));
+                        .reduced(6);
+        labels[static_cast<size_t>(index)].setBounds(cell.removeFromTop(30));
         sliders[static_cast<size_t>(index)].setBounds(cell);
     }
 }

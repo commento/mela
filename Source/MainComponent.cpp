@@ -2,6 +2,12 @@
 
 #include <algorithm>
 
+namespace
+{
+constexpr int designWidth = 1280;
+constexpr int designHeight = 800;
+}
+
 MainComponent::MainComponent()
 {
     setLookAndFeel(&melaLookAndFeel);
@@ -181,7 +187,7 @@ MainComponent::MainComponent()
         label.setText(name, juce::dontSendNotification);
         label.setJustificationType(juce::Justification::centred);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 88, 26);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 132, 39);
         slider.setMouseDragSensitivity(300);
         slider.setRange(minimum, maximum, step);
         slider.setValue(initialValue, juce::dontSendNotification);
@@ -359,6 +365,12 @@ MainComponent::~MainComponent()
 void MainComponent::paint(juce::Graphics& graphics)
 {
     graphics.fillAll(MelaColours::aubergine);
+
+    const auto scaleX = static_cast<float>(getWidth()) / static_cast<float>(designWidth);
+    const auto scaleY = static_cast<float>(getHeight()) / static_cast<float>(designHeight);
+    juce::Graphics::ScopedSaveState savedState(graphics);
+    graphics.addTransform(juce::AffineTransform::scale(scaleX, scaleY));
+
     graphics.setColour(MelaColours::custard);
     graphics.setFont(melaLookAndFeel.getTextButtonFont(audioPageButton, 64)
                          .withHeight(30.0f));
@@ -369,9 +381,10 @@ void MainComponent::paint(juce::Graphics& graphics)
                      : currentPage == Page::effects ? "MELA - EFFETTI"
                                                     : "MELA - SCENE";
     graphics.drawText(title,
-                      24, 12, getWidth() - 650, 42, juce::Justification::centredLeft);
-    const auto panel = getLocalBounds().reduced(24).withTrimmedTop(60)
-                                      .withTrimmedBottom(82).toFloat();
+                      24, 12, designWidth - 650, 42, juce::Justification::centredLeft);
+    const auto panel = juce::Rectangle<int>(0, 0, designWidth, designHeight)
+                           .reduced(24).withTrimmedTop(60)
+                           .withTrimmedBottom(82).toFloat();
     graphics.setColour(MelaColours::ink.withAlpha(0.55f));
     graphics.fillRoundedRectangle(panel.translated(0.0f, 5.0f), 20.0f);
     graphics.setColour(MelaColours::panel);
@@ -382,7 +395,10 @@ void MainComponent::paint(juce::Graphics& graphics)
 
 void MainComponent::resized()
 {
-    auto outer = getLocalBounds().reduced(24);
+    // The UI was originally laid out on a 1280x800 design grid. All component
+    // bounds are calculated on that grid and then mapped to the fixed 1920x1200
+    // touch display, producing an exact 1.5x enlargement of every touch target.
+    auto outer = juce::Rectangle<int>(0, 0, designWidth, designHeight).reduced(24);
     auto header = outer.removeFromTop(60);
     scenesPageButton.setBounds(header.removeFromRight(100).reduced(4));
     effectsPageButton.setBounds(header.removeFromRight(100).reduced(4));
@@ -560,6 +576,21 @@ void MainComponent::resized()
             delayPanel.setBounds(content.removeFromLeft(masterWidth).reduced(8));
             reverbPanel.setBounds(content.reduced(8));
         }
+    }
+
+    const auto scaleX = static_cast<float>(getWidth()) / static_cast<float>(designWidth);
+    const auto scaleY = static_cast<float>(getHeight()) / static_cast<float>(designHeight);
+    for (auto* child : getChildren())
+    {
+        if (! child->isVisible())
+            continue;
+
+        const auto bounds = child->getBounds().toFloat();
+        child->setBounds(juce::Rectangle<float>(bounds.getX() * scaleX,
+                                                bounds.getY() * scaleY,
+                                                bounds.getWidth() * scaleX,
+                                                bounds.getHeight() * scaleY)
+                             .toNearestInt());
     }
 }
 

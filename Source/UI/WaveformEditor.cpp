@@ -51,14 +51,14 @@ void WaveformEditor::paint(juce::Graphics& graphics)
     const auto bounds = getLocalBounds().toFloat();
     const auto plot = plotBounds();
     graphics.setColour(MelaColours::panelDark);
-    graphics.fillRoundedRectangle(bounds, 16.0f);
+    graphics.fillRoundedRectangle(bounds, 24.0f);
     graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(bounds.reduced(1.5f), 16.0f, 3.0f);
+    graphics.drawRoundedRectangle(bounds.reduced(2.25f), 24.0f, 4.5f);
 
     if (clip == nullptr || clip->waveformMinimum.empty())
     {
         graphics.setColour(MelaColours::cream.withAlpha(0.70f));
-        graphics.setFont(22.0f);
+        graphics.setFont(33.0f);
         graphics.drawText("Carica un file audio per visualizzare la forma d'onda",
                           getLocalBounds(), juce::Justification::centred);
         return;
@@ -115,8 +115,8 @@ void WaveformEditor::paint(juce::Graphics& graphics)
                 : trimStart + phase * (trimEnd - trimStart);
             return normalisedToX(position);
         };
-        const auto envelopeTop = plot.getY() + 20.0f;
-        const auto envelopeBottom = plot.getBottom() - 20.0f;
+        const auto envelopeTop = plot.getY() + 30.0f;
+        const auto envelopeBottom = plot.getBottom() - 30.0f;
         const auto yAtLevel = [envelopeTop, envelopeBottom](float level)
         {
             return envelopeBottom - level * (envelopeBottom - envelopeTop);
@@ -141,11 +141,11 @@ void WaveformEditor::paint(juce::Graphics& graphics)
         graphics.setColour(MelaColours::coral.withAlpha(0.16f));
         graphics.fillPath(envelopeFill);
         graphics.setColour(MelaColours::coral);
-        graphics.strokePath(envelopePath, juce::PathStrokeType(3.0f));
+        graphics.strokePath(envelopePath, juce::PathStrokeType(4.5f));
         graphics.restoreState();
     }
 
-    constexpr auto handleWidth = 6.0f;
+    constexpr auto handleWidth = 9.0f;
     graphics.setColour(MelaColours::sky);
     if (trimStart >= viewStart && trimStart <= viewEnd)
         graphics.fillRect(startX, plot.getY(), handleWidth, plot.getHeight());
@@ -156,24 +156,24 @@ void WaveformEditor::paint(juce::Graphics& graphics)
         && playhead >= trimStart && playhead <= trimEnd)
     {
         graphics.setColour(MelaColours::cream.withAlpha(0.9f));
-        graphics.fillRect(normalisedToX(playhead), plot.getY(), 2.0f, plot.getHeight());
+        graphics.fillRect(normalisedToX(playhead), plot.getY(), 3.0f, plot.getHeight());
     }
 
     const auto duration = durationSeconds();
     const auto timeLabel = juce::String(trimStart * duration, 2) + " s  -  "
                          + juce::String(trimEnd * duration, 2) + " s";
-    auto labelArea = getLocalBounds().removeFromBottom(34);
+    auto labelArea = getLocalBounds().removeFromBottom(51);
     graphics.setColour(MelaColours::ink.withAlpha(0.88f));
-    graphics.fillRoundedRectangle(labelArea.toFloat().reduced(8.0f, 3.0f), 6.0f);
+    graphics.fillRoundedRectangle(labelArea.toFloat().reduced(12.0f, 4.5f), 9.0f);
     graphics.setColour(MelaColours::cream);
-    graphics.setFont(17.0f);
+    graphics.setFont(25.5f);
     graphics.drawText(timeLabel, labelArea, juce::Justification::centred);
 
     const auto zoom = 1.0 / (viewEnd - viewStart);
     graphics.setColour(MelaColours::cream.withAlpha(0.7f));
-    graphics.setFont(14.0f);
+    graphics.setFont(21.0f);
     graphics.drawText("PINCH PER ZOOM  -  " + juce::String(zoom, 1) + "x",
-                      getLocalBounds().reduced(16).removeFromTop(24),
+                      getLocalBounds().reduced(24).removeFromTop(36),
                       juce::Justification::centredRight);
 }
 
@@ -201,7 +201,7 @@ void WaveformEditor::mouseDown(const juce::MouseEvent& event)
     const auto endX = normalisedToX(trimEnd);
     const auto distanceFromStart = std::abs(event.position.x - startX);
     const auto distanceFromEnd = std::abs(event.position.x - endX);
-    constexpr auto touchTarget = 34.0f;
+    constexpr auto touchTarget = 51.0f;
 
     if (distanceFromStart <= touchTarget || distanceFromEnd <= touchTarget)
     {
@@ -391,7 +391,7 @@ void WaveformEditor::updateTouchPinch()
 
 juce::Rectangle<float> WaveformEditor::plotBounds() const
 {
-    return getLocalBounds().toFloat().reduced(10.0f, 0.0f);
+    return getLocalBounds().toFloat().reduced(15.0f, 0.0f);
 }
 
 float WaveformEditor::normalisedToX(double position) const

@@ -23,6 +23,18 @@ TouchSampleBrowser::TouchSampleBrowser()
     fileList.setColour(juce::ListBox::backgroundColourId, MelaColours::panelDark);
     fileList.setColour(juce::ListBox::outlineColourId, MelaColours::ink);
     fileList.setOutlineThickness(4);
+    if (auto* viewport = fileList.getViewport())
+    {
+        viewport->setScrollBarThickness(58);
+        viewport->setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+        auto& scrollBar = viewport->getVerticalScrollBar();
+        scrollBar.setColour(juce::ScrollBar::backgroundColourId,
+                            MelaColours::panelDark);
+        scrollBar.setColour(juce::ScrollBar::trackColourId,
+                            MelaColours::ink.withAlpha(0.55f));
+        scrollBar.setColour(juce::ScrollBar::thumbColourId,
+                            MelaColours::sky);
+    }
 
     loadButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
     cancelButton.onClick = [this]
@@ -75,7 +87,10 @@ void TouchSampleBrowser::resized()
     cancelButton.setBounds(buttons.removeFromLeft(buttonWidth));
     loadButton.setBounds(buttons.removeFromRight(buttonWidth));
 
-    fileList.setRowHeight(juce::jmax(72, getHeight() / 11));
+    const auto rowHeight = juce::jmax(72, getHeight() / 11);
+    fileList.setRowHeight(rowHeight);
+    if (auto* viewport = fileList.getViewport())
+        viewport->setSingleStepSizes(0, rowHeight);
 }
 
 int TouchSampleBrowser::getNumRows()

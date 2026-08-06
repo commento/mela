@@ -569,12 +569,12 @@ void MainComponent::resized()
     // touch display, producing an exact 1.5x enlargement of every touch target.
     auto outer = juce::Rectangle<int>(0, 0, designWidth, designHeight).reduced(24);
     auto header = outer.removeFromTop(60);
+    wifiPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    networkPageButton.setBounds(header.removeFromRight(90).reduced(4));
     scenesPageButton.setBounds(header.removeFromRight(90).reduced(4));
     effectsPageButton.setBounds(header.removeFromRight(90).reduced(4));
     keysPageButton.setBounds(header.removeFromRight(90).reduced(4));
     loopPageButton.setBounds(header.removeFromRight(90).reduced(4));
-    wifiPageButton.setBounds(header.removeFromRight(90).reduced(4));
-    networkPageButton.setBounds(header.removeFromRight(90).reduced(4));
     audioPageButton.setBounds(header.removeFromRight(90).reduced(4));
 
     auto footer = outer.removeFromBottom(76);

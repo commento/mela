@@ -358,13 +358,15 @@ void WaveformEditor::moveHandle(float x)
         || plotBounds().getWidth() <= 0.0f)
         return;
 
-    constexpr auto minimumSelection = 0.005;
+    const auto minimumRange = minimumSelection();
     const auto position = xToNormalised(x);
 
     if (draggedHandle == Handle::start)
-        trimStart = juce::jmin(position, trimEnd - minimumSelection);
+        trimStart = juce::jlimit(0.0, trimEnd - minimumRange,
+                                 juce::jmin(position, trimEnd - minimumRange));
     else
-        trimEnd = juce::jmax(position, trimStart + minimumSelection);
+        trimEnd = juce::jlimit(trimStart + minimumRange, 1.0,
+                               juce::jmax(position, trimStart + minimumRange));
 
     if (onTrimChanged)
         onTrimChanged(trimStart, trimEnd);
@@ -493,4 +495,12 @@ double WaveformEditor::durationSeconds() const
         return 0.0;
 
     return static_cast<double>(clip->audio.getNumSamples()) / clip->sourceSampleRate;
+}
+
+double WaveformEditor::minimumSelection() const
+{
+    if (clip == nullptr || clip->audio.getNumSamples() < 2)
+        return 0.000001;
+
+    return 1.0 / static_cast<double>(clip->audio.getNumSamples());
 }

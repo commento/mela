@@ -95,8 +95,10 @@ private:
         {
             const auto hiddenCursor = juce::MouseCursor(juce::MouseCursor::NoCursor);
             setMouseCursor(hiddenCursor);
-            for (auto& source : juce::Desktop::getInstance().getMouseSources())
-                source.showMouseCursor(hiddenCursor);
+            auto& desktop = juce::Desktop::getInstance();
+            for (int index = 0; index < desktop.getNumMouseSources(); ++index)
+                if (auto* source = desktop.getMouseSource(index))
+                    source->showMouseCursor(hiddenCursor);
         }
        #endif
     };

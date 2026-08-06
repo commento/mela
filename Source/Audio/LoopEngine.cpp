@@ -112,7 +112,11 @@ void LoopEngine::setTrimRange(int slotIndex, double newStart, double newEnd)
     if (! isValidSlot(slotIndex))
         return;
 
-    constexpr auto minimumRange = 0.001;
+    const auto currentClip = std::atomic_load(
+        &voices[static_cast<size_t>(slotIndex)].clip);
+    const auto minimumRange = currentClip != nullptr && currentClip->audio.getNumSamples() >= 2
+        ? 1.0 / static_cast<double>(currentClip->audio.getNumSamples())
+        : 0.000001;
     const auto start = juce::jlimit(0.0, 1.0 - minimumRange, newStart);
     const auto end = juce::jlimit(start + minimumRange, 1.0, newEnd);
     auto& voice = voices[static_cast<size_t>(slotIndex)];
@@ -495,9 +499,19 @@ void LoopEngine::renderVoice(Voice& voice, float* const* outputs,
 
     for (int frame = 0; frame < numSamples; ++frame)
     {
-        const auto outsideRange = isReversed ? voice.playhead < startSample
-                                             : voice.playhead >= endSample;
-        if (outsideRange)
+        const auto beforeStart = voice.playhead < startSample;
+        const auto afterEnd = voice.playhead >= endSample;
+        const auto trimMovedPastPlayhead = isReversed ? afterEnd : beforeStart;
+        if (trimMovedPastPlayhead)
+        {
+            // Live trim edits can move the entry boundary over the current
+            // playhead. Jump straight into the new range instead of outputting
+            // silence until the old playhead catches up.
+            voice.playhead = isReversed ? endSample - 0.0001 : startSample;
+        }
+
+        const auto reachedPlaybackEnd = isReversed ? beforeStart : afterEnd;
+        if (reachedPlaybackEnd)
         {
             if (! shouldLoop)
             {

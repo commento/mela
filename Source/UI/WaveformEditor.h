@@ -50,6 +50,7 @@ private:
     [[nodiscard]] float normalisedToX(double position) const;
     [[nodiscard]] double xToNormalised(float x) const;
     [[nodiscard]] double durationSeconds() const;
+    [[nodiscard]] double minimumSelection() const;
 
     struct TouchState
     {

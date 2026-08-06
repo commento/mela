@@ -584,11 +584,11 @@ void MainComponent::resized()
     auto content = outer.reduced(18, 12);
     if (currentPage == Page::audio)
     {
-        audioInfoLabel.setBounds(content.removeFromTop(62).reduced(12, 4));
-        content.removeFromTop(8);
-        continueButton.setBounds(content.removeFromBottom(58).removeFromRight(220).reduced(5));
+        audioInfoLabel.setBounds(content.removeFromTop(54).reduced(8, 2));
+        content.removeFromTop(4);
+        continueButton.setBounds(content.removeFromBottom(70).removeFromRight(280).reduced(5));
         if (audioDeviceSelector != nullptr)
-            audioDeviceSelector->setBounds(content.reduced(35, 8));
+            audioDeviceSelector->setBounds(content.reduced(12, 2));
     }
     else if (currentPage == Page::wifi)
     {
@@ -981,7 +981,7 @@ void MainComponent::initialiseAudio(bool microphonePermissionGranted)
 
     audioDeviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
         deviceManager, 0, 2, 1, 2, false, false, false, false);
-    audioDeviceSelector->setItemHeight(34);
+    audioDeviceSelector->setItemHeight(54);
     addAndMakeVisible(*audioDeviceSelector);
     audioDeviceSelector->setVisible(currentPage == Page::audio);
 

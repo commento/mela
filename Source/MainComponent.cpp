@@ -46,10 +46,10 @@ MainComponent::MainComponent()
         loadFileIntoActiveSlot(file);
     };
 
-    for (auto* component : std::array<juce::Component*, 11> {
+    for (auto* component : std::array<juce::Component*, 12> {
              &playButton, &stopButton, &stopAllButton,
              &audioPageButton, &wifiPageButton, &networkPageButton, &loopPageButton,
-             &keysPageButton, &effectsPageButton, &scenesPageButton,
+             &keysPageButton, &effectsPageButton, &scenesPageButton, &powerButton,
              &statusLabel })
         addAndMakeVisible(component);
 
@@ -258,6 +258,9 @@ MainComponent::MainComponent()
     keysPageButton.onClick = [this] { showPage(Page::keys); };
     effectsPageButton.onClick = [this] { showPage(Page::effects); };
     scenesPageButton.onClick = [this] { showPage(Page::scenes); };
+    powerButton.setColour(juce::TextButton::buttonColourId,
+                          MelaColours::coral.darker(0.18f));
+    powerButton.onClick = [this] { showPowerDialog(); };
     continueButton.onClick = [this] { showPage(Page::loop); };
 
     loopButton.onClick = [this]
@@ -550,7 +553,7 @@ void MainComponent::paint(juce::Graphics& graphics)
                      : currentPage == Page::effects ? "MELA - EFFETTI"
                                                     : "MELA - SCENE";
     graphics.drawText(title,
-                      24, 12, designWidth - 700, 42, juce::Justification::centredLeft);
+                      24, 12, designWidth - 800, 42, juce::Justification::centredLeft);
     const auto panel = juce::Rectangle<int>(0, 0, designWidth, designHeight)
                            .reduced(24).withTrimmedTop(60)
                            .withTrimmedBottom(82).toFloat();
@@ -569,6 +572,7 @@ void MainComponent::resized()
     // touch display, producing an exact 1.5x enlargement of every touch target.
     auto outer = juce::Rectangle<int>(0, 0, designWidth, designHeight).reduced(24);
     auto header = outer.removeFromTop(60);
+    powerButton.setBounds(header.removeFromRight(100).reduced(4));
     wifiPageButton.setBounds(header.removeFromRight(90).reduced(4));
     networkPageButton.setBounds(header.removeFromRight(90).reduced(4));
     scenesPageButton.setBounds(header.removeFromRight(90).reduced(4));
@@ -1162,6 +1166,73 @@ void MainComponent::updateWifiKeyboardLabels()
     wifiKeyboardButtons[42].setButtonText("SPAZIO");
     wifiKeyboardButtons[43].setButtonText("CANCELLA");
     wifiKeyboardButtons[44].setButtonText("SVUOTA");
+}
+
+void MainComponent::showPowerDialog()
+{
+    if (powerActionPending.load())
+        return;
+
+    auto* dialog = new juce::AlertWindow(
+        "Alimentazione",
+        "Mela salvera' lo stato e fermera' l'audio prima di continuare.",
+        juce::MessageBoxIconType::WarningIcon);
+    dialog->addButton("SPEGNI", 1);
+    dialog->addButton("RIAVVIA", 2);
+    dialog->addButton("ANNULLA", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    dialog->enterModalState(true,
+        juce::ModalCallbackFunction::create([safeThis, dialog](int result)
+        {
+            delete dialog;
+            if (safeThis != nullptr && (result == 1 || result == 2))
+                safeThis->performPowerAction(result == 2);
+        }), false);
+}
+
+void MainComponent::performPowerAction(bool restart)
+{
+#if JUCE_LINUX
+    if (powerActionPending.exchange(true))
+        return;
+
+    touchKeyboard.releaseAll();
+    engine.stopAll();
+    if (engine.isRecording())
+        stopAndLoadRecording();
+    saveAutosaveIfChanged();
+
+    powerButton.setEnabled(false);
+    const auto action = restart ? juce::String("RIAVVIO") : juce::String("SPEGNIMENTO");
+    statusLabel.setText(action + " IN CORSO...", juce::dontSendNotification);
+
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::Thread::launch([safeThis, restart]
+    {
+        const auto command = restart ? "reboot" : "poweroff";
+        const auto result = runCommand(
+            { "sudo", "-n", "/usr/bin/systemctl", command }, 10000);
+        if (result.started && result.finished && result.exitCode == 0)
+            return;
+        juce::MessageManager::callAsync([safeThis, result]
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->powerActionPending.store(false);
+            safeThis->powerButton.setEnabled(true);
+            const auto detail = result.output.isNotEmpty()
+                ? ": " + result.output : juce::String();
+            safeThis->statusLabel.setText(
+                "COMANDO POWER NON RIUSCITO" + detail,
+                juce::dontSendNotification);
+        });
+    });
+#else
+    juce::ignoreUnused(restart);
+    statusLabel.setText("POWER DISPONIBILE SUL RASPBERRY PI",
+                        juce::dontSendNotification);
+#endif
 }
 
 void MainComponent::refreshWifiNetworks(bool announceResult)

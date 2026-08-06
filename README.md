@@ -47,7 +47,9 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - multitouch Linux diretto fino a 10 punti per pinch della waveform e tastiera polifonica.
 - skin cartoon originale anni '90 con palette ad alto contrasto, bordi illustrati e
   font Luckiest Guy incorporato nell'eseguibile;
-- splash screen cartoon 1920×1200 coerente con la nuova interfaccia.
+- splash screen cartoon 1920×1200 coerente con la nuova interfaccia;
+- tasto `POWER` con conferma touch per salvare lo stato e spegnere o riavviare
+  correttamente il Raspberry Pi.
 
 I file sono caricati in RAM. Un loop stereo di 10 secondi a 48 kHz occupa circa
 3,84 MB in formato float, quindi questa strategia è appropriata per il primo
@@ -128,7 +130,8 @@ sudo systemctl reboot
 ```
 
 Lo script copia Mela in `/opt/mela/bin/Mela`, disabilita il display manager per
-il riavvio successivo e abilita `mela-kiosk.service`. Mela occupa tutto lo schermo,
+il riavvio successivo, abilita `mela-kiosk.service` e concede all'utente Mela i soli
+comandi privilegiati di spegnimento e riavvio. Mela occupa tutto lo schermo,
 imposta il touch a 1920x1200, nasconde il cursore e viene riavviata
 automaticamente se termina. La sessione
 corrente non viene chiusa durante l'installazione; dopo il riavvio la manutenzione

@@ -98,6 +98,8 @@ private:
     void updateWifiStatus();
     void setWifiBusy(bool busy, const juce::String& message);
     void updateWifiKeyboardLabels();
+    void showPowerDialog();
+    void performPowerAction(bool restart);
     void timerCallback() override;
     void updateEnvelope();
     void updateEffects();
@@ -162,6 +164,7 @@ private:
     juce::TextButton keysPageButton { "KEYS" };
     juce::TextButton effectsPageButton { "FX" };
     juce::TextButton scenesPageButton { "SCENE" };
+    juce::TextButton powerButton { "POWER" };
     juce::ToggleButton loopButton { "RIPETI" };
     juce::ToggleButton reverseButton { "REVERSE" };
     juce::ToggleButton envelopeCycleButton { "ADSR CICLICO" };
@@ -219,6 +222,7 @@ private:
     std::array<juce::TextButton, 45> wifiKeyboardButtons;
     std::vector<juce::String> wifiNetworks;
     std::atomic_bool wifiBusy { false };
+    std::atomic_bool powerActionPending { false };
     int wifiRefreshTicks = 0;
 
     static constexpr int numberOfScenes = 8;

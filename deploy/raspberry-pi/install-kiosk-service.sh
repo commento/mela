@@ -58,13 +58,20 @@ if [[ -n ${display_manager} && ${display_manager} != display-manager.service ]];
 fi
 
 unit_file=$(mktemp)
-trap 'rm -f "${unit_file}"' EXIT
+power_rules=$(mktemp)
+trap 'rm -f "${unit_file}" "${power_rules}"' EXIT
 sed -e "s|@USER@|${mela_user}|g" \
     -e "s|@GROUP@|${mela_group}|g" \
     -e "s|@HOME@|${mela_home}|g" \
     "${project_root}/deploy/raspberry-pi/mela-kiosk.service.in" \
     > "${unit_file}"
 install -m 0644 "${unit_file}" /etc/systemd/system/mela-kiosk.service
+
+# Grant only the two privileged actions exposed by Mela's POWER dialog.
+printf '%s ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot\n' \
+    "${mela_user}" > "${power_rules}"
+visudo -cf "${power_rules}"
+install -m 0440 "${power_rules}" /etc/sudoers.d/mela-power
 
 systemctl set-default multi-user.target
 systemctl mask getty@tty1.service

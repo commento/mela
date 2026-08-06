@@ -9,6 +9,7 @@ fi
 state_directory=/var/lib/mela-kiosk
 systemctl disable --now mela-kiosk.service 2>/dev/null || true
 systemctl unmask getty@tty1.service
+rm -f /etc/sudoers.d/mela-power
 
 if [[ -f ${state_directory}/previous-target ]]; then
     previous_target=$(tr -d '\n' < "${state_directory}/previous-target")

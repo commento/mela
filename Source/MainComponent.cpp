@@ -342,6 +342,25 @@ MainComponent::MainComponent()
     showPage(Page::audio);
     startTimerHz(20);
 
+    multiTouchInput.onAvailabilityChanged = [this](bool isAvailable)
+    {
+        waveform.setHardwareTouchEnabled(isAvailable);
+        touchKeyboard.setHardwareTouchEnabled(isAvailable);
+        if (! isAvailable)
+        {
+            hardwareTouchTargets.fill(HardwareTouchTarget::none);
+            handleHardwareTouches({});
+        }
+        juce::Logger::writeToLog(isAvailable
+            ? "Mela: multitouch Linux attivo (fino a 10 punti)"
+            : "Mela: dispositivo multitouch Linux non disponibile");
+    };
+    multiTouchInput.onTouchesChanged = [this](const auto& touches)
+    {
+        handleHardwareTouches(touches);
+    };
+    multiTouchInput.start();
+
     juce::Component::SafePointer<MainComponent> safeThis(this);
     juce::RuntimePermissions::request(juce::RuntimePermissions::recordAudio,
         [safeThis](bool granted)
@@ -353,6 +372,7 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
+    multiTouchInput.stop();
     stopTimer();
     saveAutosaveIfChanged();
     if (engine.isRecording())
@@ -360,6 +380,51 @@ MainComponent::~MainComponent()
     deviceManager.removeAudioCallback(&engine);
     deviceManager.closeAudioDevice();
     setLookAndFeel(nullptr);
+}
+
+void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& contacts)
+{
+    using TouchPoints = std::array<std::optional<juce::Point<float>>,
+                                   LinuxMultiTouchInput::maximumTouches>;
+    TouchPoints waveformPoints;
+    TouchPoints keyboardPoints;
+
+    for (size_t index = 0; index < contacts.size(); ++index)
+    {
+        const auto& contact = contacts[index];
+        auto& target = hardwareTouchTargets[index];
+        if (! contact.active)
+        {
+            target = HardwareTouchTarget::none;
+            continue;
+        }
+
+        const auto mainPosition = juce::Point<float>(
+            contact.normalisedPosition.x * static_cast<float>(getWidth()),
+            contact.normalisedPosition.y * static_cast<float>(getHeight()));
+        const auto mainPositionInt = mainPosition.roundToInt();
+
+        if ((target == HardwareTouchTarget::waveform && ! waveform.isVisible())
+            || (target == HardwareTouchTarget::keyboard && ! touchKeyboard.isVisible()))
+            target = HardwareTouchTarget::none;
+
+        if (target == HardwareTouchTarget::none)
+        {
+            if (waveform.isVisible() && waveform.getBounds().contains(mainPositionInt))
+                target = HardwareTouchTarget::waveform;
+            else if (touchKeyboard.isVisible()
+                     && touchKeyboard.getBounds().contains(mainPositionInt))
+                target = HardwareTouchTarget::keyboard;
+        }
+
+        if (target == HardwareTouchTarget::waveform)
+            waveformPoints[index] = waveform.getLocalPoint(this, mainPositionInt).toFloat();
+        else if (target == HardwareTouchTarget::keyboard)
+            keyboardPoints[index] = touchKeyboard.getLocalPoint(this, mainPositionInt).toFloat();
+    }
+
+    waveform.setHardwareTouches(waveformPoints);
+    touchKeyboard.setHardwareTouches(keyboardPoints);
 }
 
 void MainComponent::paint(juce::Graphics& graphics)

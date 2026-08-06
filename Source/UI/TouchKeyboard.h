@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <functional>
+#include <optional>
 
 class TouchKeyboard final : public juce::Component
 {
@@ -13,6 +14,8 @@ public:
     void setBaseMidiNote(int midiNote);
     [[nodiscard]] int getBaseMidiNote() const;
     void releaseAll();
+    void setHardwareTouchEnabled(bool shouldUseHardwareTouch);
+    void setHardwareTouches(const std::array<std::optional<juce::Point<float>>, 10>& points);
 
     void paint(juce::Graphics& graphics) override;
     void mouseDown(const juce::MouseEvent& event) override;
@@ -40,4 +43,5 @@ private:
         -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, -1, -1, -1, -1
     };
+    bool hardwareTouchEnabled = false;
 };

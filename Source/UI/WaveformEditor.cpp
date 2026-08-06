@@ -1,6 +1,7 @@
 #include "WaveformEditor.h"
 #include "MelaLookAndFeel.h"
 
+#include <algorithm>
 #include <cmath>
 
 void WaveformEditor::setClip(std::shared_ptr<const LoopEngine::Clip> newClip)
@@ -177,9 +178,70 @@ void WaveformEditor::paint(juce::Graphics& graphics)
                       juce::Justification::centredRight);
 }
 
+void WaveformEditor::setHardwareTouchEnabled(bool shouldUseHardwareTouch)
+{
+    hardwareTouchEnabled = shouldUseHardwareTouch;
+    hardwareTouchCount = 0;
+    touchPinching = false;
+    draggedHandle = Handle::none;
+    for (auto& touch : touches)
+        touch.active = false;
+}
+
+void WaveformEditor::setHardwareTouches(
+    const std::array<std::optional<juce::Point<float>>, 10>& points)
+{
+    if (! hardwareTouchEnabled)
+        return;
+
+    const auto previousCount = hardwareTouchCount;
+    hardwareTouchCount = 0;
+    for (size_t index = 0; index < touches.size(); ++index)
+    {
+        auto& touch = touches[index];
+        touch.active = index < points.size() && points[index].has_value();
+        if (touch.active)
+        {
+            touch.position = *points[index];
+            ++hardwareTouchCount;
+        }
+    }
+
+    if (clip == nullptr)
+        return;
+
+    if (hardwareTouchCount >= 2)
+    {
+        draggedHandle = Handle::none;
+        if (! touchPinching || previousCount < 2)
+            beginTouchPinch();
+        else
+            updateTouchPinch();
+        return;
+    }
+
+    touchPinching = false;
+    if (hardwareTouchCount == 1)
+    {
+        const auto active = std::find_if(touches.begin(), touches.end(),
+                                         [](const auto& touch) { return touch.active; });
+        if (active != touches.end())
+        {
+            if (previousCount != 1)
+                beginSingleTouch(active->position);
+            else
+                moveSingleTouch(active->position);
+        }
+    }
+    else
+    {
+        draggedHandle = Handle::none;
+    }
+}
+
 void WaveformEditor::mouseDown(const juce::MouseEvent& event)
 {
-    if (clip == nullptr)
+    if (clip == nullptr || hardwareTouchEnabled)
         return;
 
     if (event.source.isTouch())
@@ -197,27 +259,14 @@ void WaveformEditor::mouseDown(const juce::MouseEvent& event)
         }
     }
 
-    const auto startX = normalisedToX(trimStart);
-    const auto endX = normalisedToX(trimEnd);
-    const auto distanceFromStart = std::abs(event.position.x - startX);
-    const auto distanceFromEnd = std::abs(event.position.x - endX);
-    constexpr auto touchTarget = 51.0f;
-
-    if (distanceFromStart <= touchTarget || distanceFromEnd <= touchTarget)
-    {
-        draggedHandle = distanceFromStart <= distanceFromEnd ? Handle::start : Handle::end;
-        moveHandle(event.position.x);
-    }
-    else
-    {
-        draggedHandle = Handle::pan;
-        dragOriginX = event.position.x;
-        dragOriginViewStart = viewStart;
-    }
+    beginSingleTouch(event.position);
 }
 
 void WaveformEditor::mouseDrag(const juce::MouseEvent& event)
 {
+    if (hardwareTouchEnabled)
+        return;
+
     if (event.source.isTouch())
     {
         updateTouch(event, true);
@@ -234,14 +283,14 @@ void WaveformEditor::mouseDrag(const juce::MouseEvent& event)
         }
     }
 
-    if (draggedHandle == Handle::pan)
-        panView(event.position.x);
-    else
-        moveHandle(event.position.x);
+    moveSingleTouch(event.position);
 }
 
 void WaveformEditor::mouseUp(const juce::MouseEvent& event)
 {
+    if (hardwareTouchEnabled)
+        return;
+
     if (event.source.isTouch())
     {
         updateTouch(event, false);
@@ -253,6 +302,35 @@ void WaveformEditor::mouseUp(const juce::MouseEvent& event)
     }
 
     draggedHandle = Handle::none;
+}
+
+void WaveformEditor::beginSingleTouch(juce::Point<float> position)
+{
+    const auto startX = normalisedToX(trimStart);
+    const auto endX = normalisedToX(trimEnd);
+    const auto distanceFromStart = std::abs(position.x - startX);
+    const auto distanceFromEnd = std::abs(position.x - endX);
+    constexpr auto touchTarget = 51.0f;
+
+    if (distanceFromStart <= touchTarget || distanceFromEnd <= touchTarget)
+    {
+        draggedHandle = distanceFromStart <= distanceFromEnd ? Handle::start : Handle::end;
+        moveHandle(position.x);
+    }
+    else
+    {
+        draggedHandle = Handle::pan;
+        dragOriginX = position.x;
+        dragOriginViewStart = viewStart;
+    }
+}
+
+void WaveformEditor::moveSingleTouch(juce::Point<float> position)
+{
+    if (draggedHandle == Handle::pan)
+        panView(position.x);
+    else
+        moveHandle(position.x);
 }
 
 void WaveformEditor::mouseDoubleClick(const juce::MouseEvent&)

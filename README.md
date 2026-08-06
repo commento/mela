@@ -41,6 +41,7 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - conversione della frequenza di campionamento tramite interpolazione lineare;
 - volume;
 - controlli grandi per display touch 1920×1200.
+- multitouch Linux diretto fino a 10 punti per pinch della waveform e tastiera polifonica.
 - skin cartoon originale anni '90 con palette ad alto contrasto, bordi illustrati e
   font Luckiest Guy incorporato nell'eseguibile;
 - splash screen cartoon 1920×1200 coerente con la nuova interfaccia.

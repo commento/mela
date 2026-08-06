@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "Audio/LoopEngine.h"
 #include <array>
+#include <optional>
 
 class WaveformEditor final : public juce::Component
 {
@@ -16,6 +17,8 @@ public:
     void setEnvelope(double attackSeconds, double decaySeconds,
                      float sustainLevel, double releaseSeconds,
                      double playbackRate, bool cycleEnabled, bool reversed);
+    void setHardwareTouchEnabled(bool shouldUseHardwareTouch);
+    void setHardwareTouches(const std::array<std::optional<juce::Point<float>>, 10>& points);
 
     void paint(juce::Graphics& graphics) override;
     void mouseDown(const juce::MouseEvent& event) override;
@@ -41,6 +44,8 @@ private:
     void updateTouch(const juce::MouseEvent& event, bool isActive);
     void beginTouchPinch();
     void updateTouchPinch();
+    void beginSingleTouch(juce::Point<float> position);
+    void moveSingleTouch(juce::Point<float> position);
     [[nodiscard]] juce::Rectangle<float> plotBounds() const;
     [[nodiscard]] float normalisedToX(double position) const;
     [[nodiscard]] double xToNormalised(float x) const;
@@ -73,4 +78,6 @@ private:
     double currentPlaybackRate = 1.0;
     bool envelopeCycleEnabled = true;
     bool playbackReversed = false;
+    bool hardwareTouchEnabled = false;
+    int hardwareTouchCount = 0;
 };

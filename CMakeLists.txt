@@ -29,6 +29,7 @@ juce_add_binary_data(MelaAssets
 target_sources(Mela PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
+    Source/Input/LinuxMultiTouchInput.cpp
     Source/Audio/LoopEngine.cpp
     Source/Audio/AudioRecorder.cpp
     Source/Audio/EffectsChain.cpp

@@ -2,11 +2,13 @@
 
 #include <JuceHeader.h>
 #include "Audio/LoopEngine.h"
+#include "Input/LinuxMultiTouchInput.h"
 #include "UI/EffectPanel.h"
 #include "UI/MelaLookAndFeel.h"
 #include "UI/TouchKeyboard.h"
 #include "UI/WaveformEditor.h"
 #include <array>
+#include <optional>
 #include <vector>
 
 class MainComponent final : public juce::Component,
@@ -103,10 +105,12 @@ private:
     void deleteSelectedScene();
     void refreshSceneButtons();
     void saveAutosaveIfChanged();
+    void handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& touches);
     juce::File sceneFile(int sceneIndex) const;
     bool writeSceneFile(const juce::File& file, const juce::var& state) const;
 
     MelaLookAndFeel melaLookAndFeel;
+    LinuxMultiTouchInput multiTouchInput;
     juce::AudioDeviceManager deviceManager;
     LoopEngine engine;
     Page currentPage = Page::audio;
@@ -118,6 +122,15 @@ private:
     std::array<bool, LoopEngine::numberOfSlots> slotSourceIsRecording {};
     MasterEffectSettings masterEffectSettings;
     int effectTarget = 0;
+
+    enum class HardwareTouchTarget
+    {
+        none,
+        waveform,
+        keyboard
+    };
+    std::array<HardwareTouchTarget, LinuxMultiTouchInput::maximumTouches>
+        hardwareTouchTargets {};
 
     WaveformEditor waveform;
     TouchKeyboard touchKeyboard;

@@ -26,6 +26,42 @@ void TouchKeyboard::releaseAll()
     repaint();
 }
 
+void TouchKeyboard::setHardwareTouchEnabled(bool shouldUseHardwareTouch)
+{
+    if (hardwareTouchEnabled == shouldUseHardwareTouch)
+        return;
+
+    releaseAll();
+    hardwareTouchEnabled = shouldUseHardwareTouch;
+}
+
+void TouchKeyboard::setHardwareTouches(
+    const std::array<std::optional<juce::Point<float>>, 10>& points)
+{
+    if (! hardwareTouchEnabled)
+        return;
+
+    for (size_t index = 0; index < points.size(); ++index)
+    {
+        auto& activeNote = activeTouchNotes[index];
+        const auto newNote = points[index].has_value() ? noteAt(*points[index]) : -1;
+        if (newNote == activeNote)
+            continue;
+
+        if (activeNote >= 0 && onNoteOff)
+            onNoteOff(activeNote);
+        activeNote = newNote;
+        if (activeNote >= 0 && onNoteOn)
+        {
+            const auto velocity = juce::jlimit(0.65f, 1.0f,
+                1.0f - 0.35f * points[index]->y
+                    / juce::jmax(1.0f, static_cast<float>(getHeight())));
+            onNoteOn(activeNote, velocity);
+        }
+    }
+    repaint();
+}
+
 void TouchKeyboard::paint(juce::Graphics& graphics)
 {
     const auto bounds = getLocalBounds().toFloat();
@@ -70,16 +106,23 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
 
 void TouchKeyboard::mouseDown(const juce::MouseEvent& event)
 {
+    if (hardwareTouchEnabled)
+        return;
     moveTouch(event);
 }
 
 void TouchKeyboard::mouseDrag(const juce::MouseEvent& event)
 {
+    if (hardwareTouchEnabled)
+        return;
     moveTouch(event);
 }
 
 void TouchKeyboard::mouseUp(const juce::MouseEvent& event)
 {
+    if (hardwareTouchEnabled)
+        return;
+
     auto& activeNote = activeTouchNotes[static_cast<size_t>(touchIndex(event))];
     if (activeNote >= 0 && onNoteOff)
         onNoteOff(activeNote);

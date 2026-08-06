@@ -275,7 +275,7 @@ MainComponent::MainComponent()
         updateEnvelope();
     };
 
-    const auto configureKnob = [](juce::Slider& slider, juce::Label& label,
+    const auto configureKnob = [](TouchSlider& slider, juce::Label& label,
                                   const juce::String& name, double minimum,
                                   double maximum, double step, double initialValue,
                                   const juce::String& suffix)
@@ -283,11 +283,11 @@ MainComponent::MainComponent()
         label.setText(name, juce::dontSendNotification);
         label.setJustificationType(juce::Justification::centred);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 132, 39);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 132, 39);
         slider.setMouseDragSensitivity(300);
         slider.setRange(minimum, maximum, step);
         slider.setValue(initialValue, juce::dontSendNotification);
-        slider.setDoubleClickReturnValue(true, initialValue);
+        slider.setDefaultValue(initialValue);
         slider.setTextValueSuffix(suffix);
     };
 

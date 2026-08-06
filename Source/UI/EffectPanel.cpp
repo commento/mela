@@ -28,11 +28,11 @@ void EffectPanel::configure(const juce::String& effectName,
         label.setText(parameter->name, juce::dontSendNotification);
         label.setJustificationType(juce::Justification::centred);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 123, 35);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 123, 35);
         slider.setMouseDragSensitivity(300);
         slider.setRange(parameter->minimum, parameter->maximum, parameter->step);
         slider.setValue(parameter->defaultValue, juce::dontSendNotification);
-        slider.setDoubleClickReturnValue(true, parameter->defaultValue);
+        slider.setDefaultValue(parameter->defaultValue);
         slider.setTextValueSuffix(parameter->suffix);
         slider.onValueChange = [this]
         {

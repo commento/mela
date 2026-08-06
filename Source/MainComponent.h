@@ -5,6 +5,7 @@
 #include "Input/LinuxMultiTouchInput.h"
 #include "UI/EffectPanel.h"
 #include "UI/MelaLookAndFeel.h"
+#include "UI/TouchSlider.h"
 #include "UI/TouchKeyboard.h"
 #include "UI/WaveformEditor.h"
 #include <array>
@@ -163,21 +164,21 @@ private:
     juce::Label rootNoteLabel;
     juce::Label instrumentModeLabel;
     juce::ComboBox instrumentModeBox;
-    juce::Slider keyAttackSlider;
-    juce::Slider keyDecaySlider;
-    juce::Slider keySustainSlider;
-    juce::Slider keyReleaseSlider;
+    TouchSlider keyAttackSlider;
+    TouchSlider keyDecaySlider;
+    TouchSlider keySustainSlider;
+    TouchSlider keyReleaseSlider;
     juce::Label keyAttackLabel;
     juce::Label keyDecayLabel;
     juce::Label keySustainLabel;
     juce::Label keyReleaseLabel;
 
-    juce::Slider speedSlider;
-    juce::Slider gainSlider;
-    juce::Slider attackSlider;
-    juce::Slider decaySlider;
-    juce::Slider sustainSlider;
-    juce::Slider releaseSlider;
+    TouchSlider speedSlider;
+    TouchSlider gainSlider;
+    TouchSlider attackSlider;
+    TouchSlider decaySlider;
+    TouchSlider sustainSlider;
+    TouchSlider releaseSlider;
     juce::Label speedLabel;
     juce::Label gainLabel;
     juce::Label attackLabel;
@@ -233,8 +234,8 @@ private:
     EffectPanel delayPanel;
     EffectPanel reverbPanel;
     std::array<juce::TextButton, LoopEngine::numberOfSlots + 1> effectTargetButtons;
-    juce::Slider delaySendSlider;
-    juce::Slider reverbSendSlider;
+    TouchSlider delaySendSlider;
+    TouchSlider reverbSendSlider;
     juce::Label delaySendLabel;
     juce::Label reverbSendLabel;
     juce::Label dspLoadLabel;

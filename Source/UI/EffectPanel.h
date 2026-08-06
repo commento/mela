@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "TouchSlider.h"
 #include <array>
 #include <functional>
 
@@ -34,7 +35,7 @@ public:
 private:
     juce::Label titleLabel;
     juce::ToggleButton enabledButton { "ON" };
-    std::array<juce::Slider, 5> sliders;
+    std::array<TouchSlider, 5> sliders;
     std::array<juce::Label, 5> labels;
     int parameterCount = 0;
 

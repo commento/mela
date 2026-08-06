@@ -94,11 +94,19 @@ private:
         void hideKioskCursor()
         {
             const auto hiddenCursor = juce::MouseCursor(juce::MouseCursor::NoCursor);
-            setMouseCursor(hiddenCursor);
+            hideCursorForComponent(*this, hiddenCursor);
             auto& desktop = juce::Desktop::getInstance();
             for (int index = 0; index < desktop.getNumMouseSources(); ++index)
                 if (auto* source = desktop.getMouseSource(index))
                     source->showMouseCursor(hiddenCursor);
+        }
+
+        static void hideCursorForComponent(
+            juce::Component& component, const juce::MouseCursor& hiddenCursor)
+        {
+            component.setMouseCursor(hiddenCursor);
+            for (auto* child : component.getChildren())
+                hideCursorForComponent(*child, hiddenCursor);
         }
        #endif
     };

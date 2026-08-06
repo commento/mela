@@ -27,6 +27,7 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - manopole touch: trascinamento verso l'alto per aumentare e verso il basso per diminuire;
 - doppio tap su una manopola per ripristinarne il valore predefinito;
 - pagina FX con rack insert indipendente per ciascuno dei quattro sample;
+- equalizzatore LOW/MID/HIGH indipendente per ogni sample e per il master;
 - Distorsione, Granulare, Flanger e Chorus configurabili separatamente per slot;
 - mandate Delay Send e Reverb Send per slot verso due effetti master condivisi;
 - selettori S1-S4 e MASTER, indicatore DSP/XRUN e limite ECO di 32 grani complessivi;

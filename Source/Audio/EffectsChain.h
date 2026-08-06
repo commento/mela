@@ -10,11 +10,13 @@ public:
     void prepare(double newSampleRate, int maximumBlockSize, int channels);
     void reset();
     void process(juce::AudioBuffer<float>& buffer);
+    void processEqualizer(juce::AudioBuffer<float>& buffer);
     void processInserts(juce::AudioBuffer<float>& buffer);
     void processDelayReturn(juce::AudioBuffer<float>& buffer);
     void processReverbReturn(juce::AudioBuffer<float>& buffer);
     void processLimiter(juce::AudioBuffer<float>& buffer);
 
+    void setEqualizer(float lowDb, float midDb, float highDb);
     void setDistortion(bool enabled, float drive, float toneHz, float mix);
     void setGranular(bool enabled, float sizeMs, float densityHz,
                      float positionMs, float pitchSemitones, float mix);
@@ -24,6 +26,13 @@ public:
     void setReverb(bool enabled, float size, float damping, float mix);
 
 private:
+    struct EqualizerParameters
+    {
+        std::atomic<float> lowDb { 0.0f };
+        std::atomic<float> midDb { 0.0f };
+        std::atomic<float> highDb { 0.0f };
+    } equalizer;
+
     struct DistortionParameters
     {
         std::atomic<bool> enabled { false };
@@ -83,6 +92,13 @@ private:
     double sampleRate = 44100.0;
     int preparedChannels = 2;
     std::array<float, 2> distortionToneState {};
+    std::array<float, 2> equalizerLowState {};
+    std::array<float, 2> equalizerHighState {};
+    float equalizerLowCoefficient = 0.0f;
+    float equalizerHighCoefficient = 0.0f;
+    juce::SmoothedValue<float> equalizerLowGain;
+    juce::SmoothedValue<float> equalizerMidGain;
+    juce::SmoothedValue<float> equalizerHighGain;
     std::array<float, 2> flangerFeedbackState {};
     struct Grain
     {

@@ -18,6 +18,13 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
     masterLimiter.setThreshold(-0.3f);
     masterLimiter.setRelease(50.0f);
 
+    equalizerLowCoefficient = static_cast<float>(
+        std::exp(-juce::MathConstants<double>::twoPi * 250.0 / sampleRate));
+    equalizerHighCoefficient = static_cast<float>(
+        std::exp(-juce::MathConstants<double>::twoPi * 4000.0 / sampleRate));
+    for (auto* gain : { &equalizerLowGain, &equalizerMidGain, &equalizerHighGain })
+        gain->reset(sampleRate, 0.02);
+
     flangerBuffer.setSize(preparedChannels,
                           static_cast<int>(std::ceil(sampleRate * 0.02)) + 2);
     granularBuffer.setSize(preparedChannels,
@@ -31,6 +38,14 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
 
 void EffectsChain::reset()
 {
+    equalizerLowState.fill(0.0f);
+    equalizerHighState.fill(0.0f);
+    equalizerLowGain.setCurrentAndTargetValue(
+        juce::Decibels::decibelsToGain(equalizer.lowDb.load()));
+    equalizerMidGain.setCurrentAndTargetValue(
+        juce::Decibels::decibelsToGain(equalizer.midDb.load()));
+    equalizerHighGain.setCurrentAndTargetValue(
+        juce::Decibels::decibelsToGain(equalizer.highDb.load()));
     distortionToneState.fill(0.0f);
     flangerFeedbackState.fill(0.0f);
     for (auto& grain : grains)
@@ -74,6 +89,7 @@ void EffectsChain::process(juce::AudioBuffer<float>& buffer)
 
 void EffectsChain::processInserts(juce::AudioBuffer<float>& buffer)
 {
+    processEqualizer(buffer);
     processDistortion(buffer);
     processGranular(buffer);
     processFlanger(buffer);
@@ -90,6 +106,45 @@ void EffectsChain::processInserts(juce::AudioBuffer<float>& buffer)
         chorus.process(context);
     }
 
+}
+
+void EffectsChain::processEqualizer(juce::AudioBuffer<float>& buffer)
+{
+    const auto lowDb = equalizer.lowDb.load();
+    const auto midDb = equalizer.midDb.load();
+    const auto highDb = equalizer.highDb.load();
+    equalizerLowGain.setTargetValue(juce::Decibels::decibelsToGain(lowDb));
+    equalizerMidGain.setTargetValue(juce::Decibels::decibelsToGain(midDb));
+    equalizerHighGain.setTargetValue(juce::Decibels::decibelsToGain(highDb));
+
+    if (std::abs(lowDb) < 0.0001f && std::abs(midDb) < 0.0001f
+        && std::abs(highDb) < 0.0001f
+        && ! equalizerLowGain.isSmoothing() && ! equalizerMidGain.isSmoothing()
+        && ! equalizerHighGain.isSmoothing())
+        return;
+
+    const auto channels = juce::jmin(buffer.getNumChannels(), preparedChannels);
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto lowGain = equalizerLowGain.getNextValue();
+        const auto midGain = equalizerMidGain.getNextValue();
+        const auto highGain = equalizerHighGain.getNextValue();
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            auto& lowState = equalizerLowState[static_cast<size_t>(channel)];
+            auto& highState = equalizerHighState[static_cast<size_t>(channel)];
+            auto* samples = buffer.getWritePointer(channel);
+            const auto input = samples[frame];
+            lowState = (1.0f - equalizerLowCoefficient) * input
+                     + equalizerLowCoefficient * lowState;
+            highState = (1.0f - equalizerHighCoefficient) * input
+                      + equalizerHighCoefficient * highState;
+            const auto low = lowState;
+            const auto mid = highState - lowState;
+            const auto high = input - highState;
+            samples[frame] = low * lowGain + mid * midGain + high * highGain;
+        }
+    }
 }
 
 void EffectsChain::processDelayReturn(juce::AudioBuffer<float>& buffer)
@@ -124,6 +179,13 @@ void EffectsChain::processLimiter(juce::AudioBuffer<float>& buffer)
     juce::dsp::AudioBlock<float> masterBlock(buffer);
     juce::dsp::ProcessContextReplacing<float> masterContext(masterBlock);
     masterLimiter.process(masterContext);
+}
+
+void EffectsChain::setEqualizer(float lowDb, float midDb, float highDb)
+{
+    equalizer.lowDb.store(juce::jlimit(-12.0f, 12.0f, lowDb));
+    equalizer.midDb.store(juce::jlimit(-12.0f, 12.0f, midDb));
+    equalizer.highDb.store(juce::jlimit(-12.0f, 12.0f, highDb));
 }
 
 void EffectsChain::setDistortion(bool enabled, float drive, float toneHz, float mix)

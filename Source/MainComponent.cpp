@@ -209,6 +209,7 @@ MainComponent::MainComponent()
              &distortionPanel, &granularPanel, &flangerPanel,
              &chorusPanel, &delayPanel, &reverbPanel })
         addAndMakeVisible(panel);
+    addAndMakeVisible(equalizerPanel);
 
     for (int target = 0; target <= LoopEngine::numberOfSlots; ++target)
     {
@@ -417,6 +418,7 @@ MainComponent::MainComponent()
              &distortionPanel, &granularPanel, &flangerPanel,
              &chorusPanel, &delayPanel, &reverbPanel })
         panel->onChange = [this] { updateEffects(); };
+    equalizerPanel.onChange = [this] { updateEffects(); };
     delaySendSlider.onValueChange = [this] { updateEffects(); };
     reverbSendSlider.onValueChange = [this] { updateEffects(); };
     updateEffects();
@@ -756,7 +758,10 @@ void MainComponent::resized()
 
         if (effectTarget < LoopEngine::numberOfSlots)
         {
-            auto sends = content.removeFromRight(230).reduced(8);
+            auto utilityColumn = content.removeFromRight(260).reduced(8);
+            equalizerPanel.setBounds(utilityColumn.removeFromTop(180).reduced(4));
+            utilityColumn.removeFromTop(8);
+            auto sends = utilityColumn;
             auto delayArea = sends.removeFromTop(sends.getHeight() / 2).reduced(6);
             delaySendLabel.setBounds(delayArea.removeFromTop(25));
             delaySendSlider.setBounds(delayArea);
@@ -775,6 +780,8 @@ void MainComponent::resized()
         }
         else
         {
+            auto equalizerArea = content.removeFromRight(330).reduced(8);
+            equalizerPanel.setBounds(equalizerArea);
             const auto masterWidth = content.getWidth() / 2;
             delayPanel.setBounds(content.removeFromLeft(masterWidth).reduced(8));
             reverbPanel.setBounds(content.reduced(8));
@@ -1367,6 +1374,8 @@ void MainComponent::updateEffects()
     if (effectTarget < LoopEngine::numberOfSlots)
     {
         auto& settings = slotEffectSettings[static_cast<size_t>(effectTarget)];
+        for (int index = 0; index < 3; ++index)
+            settings.equalizer[static_cast<size_t>(index)] = equalizerPanel.value(index);
         settings.distortionEnabled = distortionPanel.isEnabled();
         for (int index = 0; index < 3; ++index)
             settings.distortion[static_cast<size_t>(index)] = distortionPanel.value(index);
@@ -1382,6 +1391,10 @@ void MainComponent::updateEffects()
         settings.delaySend = delaySendSlider.getValue();
         settings.reverbSend = reverbSendSlider.getValue();
 
+        engine.setEqualizer(effectTarget,
+            static_cast<float>(settings.equalizer[0]),
+            static_cast<float>(settings.equalizer[1]),
+            static_cast<float>(settings.equalizer[2]));
         engine.setDistortion(effectTarget, settings.distortionEnabled,
             static_cast<float>(settings.distortion[0]),
             static_cast<float>(settings.distortion[1]),
@@ -1406,6 +1419,8 @@ void MainComponent::updateEffects()
         return;
     }
 
+    for (int index = 0; index < 3; ++index)
+        masterEffectSettings.equalizer[static_cast<size_t>(index)] = equalizerPanel.value(index);
     masterEffectSettings.delayEnabled = delayPanel.isEnabled();
     masterEffectSettings.reverbEnabled = reverbPanel.isEnabled();
     for (int index = 0; index < 3; ++index)
@@ -1413,6 +1428,10 @@ void MainComponent::updateEffects()
         masterEffectSettings.delay[static_cast<size_t>(index)] = delayPanel.value(index);
         masterEffectSettings.reverb[static_cast<size_t>(index)] = reverbPanel.value(index);
     }
+    engine.setMasterEqualizer(
+        static_cast<float>(masterEffectSettings.equalizer[0]),
+        static_cast<float>(masterEffectSettings.equalizer[1]),
+        static_cast<float>(masterEffectSettings.equalizer[2]));
     engine.setDelay(masterEffectSettings.delayEnabled,
                     static_cast<float>(masterEffectSettings.delay[0]),
                     static_cast<float>(masterEffectSettings.delay[1]),
@@ -1432,6 +1451,9 @@ void MainComponent::selectEffectTarget(int targetIndex)
     if (effectTarget < LoopEngine::numberOfSlots)
     {
         const auto& settings = slotEffectSettings[static_cast<size_t>(effectTarget)];
+        equalizerPanel.setTitle("EQ SAMPLE " + juce::String(effectTarget + 1));
+        for (int index = 0; index < 3; ++index)
+            equalizerPanel.setValue(index, settings.equalizer[static_cast<size_t>(index)]);
         distortionPanel.setEnabled(settings.distortionEnabled);
         granularPanel.setEnabled(settings.granularEnabled);
         flangerPanel.setEnabled(settings.flangerEnabled);
@@ -1450,6 +1472,10 @@ void MainComponent::selectEffectTarget(int targetIndex)
     }
     else
     {
+        equalizerPanel.setTitle("EQ MASTER");
+        for (int index = 0; index < 3; ++index)
+            equalizerPanel.setValue(index,
+                                    masterEffectSettings.equalizer[static_cast<size_t>(index)]);
         delayPanel.setEnabled(masterEffectSettings.delayEnabled);
         reverbPanel.setEnabled(masterEffectSettings.reverbEnabled);
         for (int index = 0; index < 3; ++index)
@@ -1475,6 +1501,7 @@ void MainComponent::updateEffectPageVisibility()
     for (auto& button : effectTargetButtons)
         button.setVisible(showEffects);
     dspLoadLabel.setVisible(showEffects);
+    equalizerPanel.setVisible(showEffects);
     for (auto* panel : std::array<EffectPanel*, 4> {
              &distortionPanel, &granularPanel, &flangerPanel, &chorusPanel })
         panel->setVisible(showSlot);
@@ -1661,7 +1688,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     };
 
     auto root = new juce::DynamicObject();
-    root->setProperty("version", 1);
+    root->setProperty("version", 2);
     root->setProperty("name", sceneName);
     root->setProperty("activeSlot", activeSlot);
 
@@ -1692,6 +1719,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
         item->setProperty("keyDecay", settings.keyDecay);
         item->setProperty("keySustain", settings.keySustain);
         item->setProperty("keyRelease", settings.keyRelease);
+        item->setProperty("equalizer", valuesToVar(effects.equalizer));
         item->setProperty("distortionEnabled", effects.distortionEnabled);
         item->setProperty("distortion", valuesToVar(effects.distortion));
         item->setProperty("granularEnabled", effects.granularEnabled);
@@ -1707,6 +1735,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     root->setProperty("slots", juce::var(slots));
 
     auto master = new juce::DynamicObject();
+    master->setProperty("equalizer", valuesToVar(masterEffectSettings.equalizer));
     master->setProperty("delayEnabled", masterEffectSettings.delayEnabled);
     master->setProperty("delay", valuesToVar(masterEffectSettings.delay));
     master->setProperty("reverbEnabled", masterEffectSettings.reverbEnabled);
@@ -1801,6 +1830,7 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         settings.keyRelease = number(item, "keyRelease", settings.keyRelease);
 
         auto& effects = slotEffectSettings[index];
+        readArray(item, "equalizer", effects.equalizer);
         effects.distortionEnabled = boolean(item, "distortionEnabled", false);
         effects.granularEnabled = boolean(item, "granularEnabled", false);
         effects.flangerEnabled = boolean(item, "flangerEnabled", false);
@@ -1841,6 +1871,7 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
 
     if (auto* master = root->getProperty("master").getDynamicObject())
     {
+        readArray(master, "equalizer", masterEffectSettings.equalizer);
         masterEffectSettings.delayEnabled = boolean(master, "delayEnabled", false);
         masterEffectSettings.reverbEnabled = boolean(master, "reverbEnabled", false);
         readArray(master, "delay", masterEffectSettings.delay);
@@ -1876,6 +1907,10 @@ void MainComponent::applyAllSettingsToEngine()
         engine.setInstrumentEnvelope(slot, settings.keyAttack, settings.keyDecay,
                                      static_cast<float>(settings.keySustain),
                                      settings.keyRelease);
+        engine.setEqualizer(slot,
+            static_cast<float>(effects.equalizer[0]),
+            static_cast<float>(effects.equalizer[1]),
+            static_cast<float>(effects.equalizer[2]));
         engine.setDistortion(slot, effects.distortionEnabled,
             static_cast<float>(effects.distortion[0]), static_cast<float>(effects.distortion[1]),
             static_cast<float>(effects.distortion[2]));
@@ -1892,6 +1927,10 @@ void MainComponent::applyAllSettingsToEngine()
         engine.setDelaySend(slot, static_cast<float>(effects.delaySend));
         engine.setReverbSend(slot, static_cast<float>(effects.reverbSend));
     }
+    engine.setMasterEqualizer(
+        static_cast<float>(masterEffectSettings.equalizer[0]),
+        static_cast<float>(masterEffectSettings.equalizer[1]),
+        static_cast<float>(masterEffectSettings.equalizer[2]));
     engine.setDelay(masterEffectSettings.delayEnabled,
                     static_cast<float>(masterEffectSettings.delay[0]),
                     static_cast<float>(masterEffectSettings.delay[1]),

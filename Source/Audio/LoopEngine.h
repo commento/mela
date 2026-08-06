@@ -60,6 +60,7 @@ public:
     [[nodiscard]] bool isRecording() const;
     [[nodiscard]] double getRecordingDurationSeconds() const;
 
+    void setEqualizer(int slotIndex, float lowDb, float midDb, float highDb);
     void setDistortion(int slotIndex, bool enabled, float drive, float toneHz, float mix);
     void setGranular(int slotIndex, bool enabled, float sizeMs, float densityHz,
                      float positionMs, float pitchSemitones, float mix);
@@ -70,6 +71,7 @@ public:
     void setReverbSend(int slotIndex, float amount);
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
     void setReverb(bool enabled, float size, float damping, float mix);
+    void setMasterEqualizer(float lowDb, float midDb, float highDb);
 
     [[nodiscard]] bool hasClip(int slotIndex) const;
     [[nodiscard]] bool isPlaying(int slotIndex) const;

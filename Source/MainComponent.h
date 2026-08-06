@@ -4,6 +4,7 @@
 #include "Audio/LoopEngine.h"
 #include "Input/LinuxMultiTouchInput.h"
 #include "UI/EffectPanel.h"
+#include "UI/EqualizerPanel.h"
 #include "UI/MelaLookAndFeel.h"
 #include "UI/TouchSlider.h"
 #include "UI/TouchKeyboard.h"
@@ -60,6 +61,7 @@ private:
 
     struct SlotEffectSettings
     {
+        std::array<double, 3> equalizer { 0.0, 0.0, 0.0 };
         bool distortionEnabled = false;
         std::array<double, 3> distortion { 2.0, 12000.0, 0.5 };
         bool granularEnabled = false;
@@ -74,6 +76,7 @@ private:
 
     struct MasterEffectSettings
     {
+        std::array<double, 3> equalizer { 0.0, 0.0, 0.0 };
         bool delayEnabled = false;
         std::array<double, 3> delay { 350.0, 0.35, 0.3 };
         bool reverbEnabled = false;
@@ -236,6 +239,7 @@ private:
     EffectPanel chorusPanel;
     EffectPanel delayPanel;
     EffectPanel reverbPanel;
+    EqualizerPanel equalizerPanel;
     std::array<juce::TextButton, LoopEngine::numberOfSlots + 1> effectTargetButtons;
     TouchSlider delaySendSlider;
     TouchSlider reverbSendSlider;

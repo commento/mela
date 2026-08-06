@@ -35,6 +35,7 @@ target_sources(Mela PRIVATE
     Source/Audio/EffectsChain.cpp
     Source/UI/WaveformEditor.cpp
     Source/UI/EffectPanel.cpp
+    Source/UI/EqualizerPanel.cpp
     Source/UI/TouchKeyboard.cpp
     Source/UI/TouchSampleBrowser.cpp
     Source/UI/MelaLookAndFeel.cpp

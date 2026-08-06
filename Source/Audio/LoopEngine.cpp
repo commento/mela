@@ -216,6 +216,13 @@ double LoopEngine::getRecordingDurationSeconds() const
     return recorder.getDurationSeconds();
 }
 
+void LoopEngine::setEqualizer(int slotIndex, float lowDb, float midDb, float highDb)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setEqualizer(
+            lowDb, midDb, highDb);
+}
+
 void LoopEngine::setDistortion(int slotIndex, bool enabled,
                                float drive, float toneHz, float mix)
 {
@@ -269,6 +276,11 @@ void LoopEngine::setDelay(bool enabled, float timeMs, float feedback, float mix)
 void LoopEngine::setReverb(bool enabled, float size, float damping, float mix)
 {
     masterEffects.setReverb(enabled, size, damping, mix);
+}
+
+void LoopEngine::setMasterEqualizer(float lowDb, float midDb, float highDb)
+{
+    masterEffects.setEqualizer(lowDb, midDb, highDb);
 }
 
 bool LoopEngine::hasClip(int slotIndex) const
@@ -359,6 +371,7 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         }
     }
 
+    masterEffects.processEqualizer(mix);
     masterEffects.processDelayReturn(delayBus);
     masterEffects.processReverbReturn(reverbBus);
     for (int channel = 0; channel < channels; ++channel)

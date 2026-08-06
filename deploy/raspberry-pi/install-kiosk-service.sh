@@ -33,6 +33,8 @@ apt-get install -y xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserv
 
 install -d -m 0755 /opt/mela/bin
 install -m 0755 "${mela_binary}" /opt/mela/bin/Mela
+install -m 0755 "${project_root}/deploy/raspberry-pi/start-mela-kiosk.sh" \
+    /opt/mela/bin/start-mela-kiosk
 install -d -m 0700 "${state_directory}"
 
 for hardware_group in audio video input render; do

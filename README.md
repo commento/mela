@@ -152,9 +152,14 @@ sudo systemctl reboot
 
 Lo script copia Mela in `/opt/mela/bin/Mela`, disabilita il display manager per
 il riavvio successivo e abilita `mela-kiosk.service`. Mela occupa tutto lo schermo,
-nasconde il cursore e viene riavviata automaticamente se termina. La sessione
+imposta il touch a 1920x1200, nasconde il cursore e viene riavviata
+automaticamente se termina. La sessione
 corrente non viene chiusa durante l'installazione; dopo il riavvio la manutenzione
 puo' essere effettuata via SSH.
+
+Il mode video puo' essere cambiato senza modificare gli script impostando
+`MELA_DISPLAY_MODE` nel servizio. Se il display non espone il mode richiesto,
+Mela usa quello corrente e stampa l'elenco dei mode disponibili nel journal.
 
 Comandi utili:
 

@@ -13,6 +13,7 @@ PAMName=login
 WorkingDirectory=@HOME@
 Environment=HOME=@HOME@
 Environment=DISPLAY=:0
+Environment=MELA_DISPLAY_MODE=1920x1200
 TTYPath=/dev/tty1
 StandardInput=tty
 StandardOutput=journal
@@ -21,7 +22,7 @@ TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
 UtmpIdentifier=tty1
-ExecStart=/usr/bin/xinit /opt/mela/bin/Mela -- :0 vt1 -keeptty -nolisten tcp
+ExecStart=/usr/bin/xinit /opt/mela/bin/start-mela-kiosk -- :0 vt1 -keeptty -nolisten tcp
 Restart=always
 RestartSec=2
 KillMode=control-group

@@ -319,7 +319,9 @@ MainComponent::MainComponent()
     statusLabel.setText("Richiesta accesso al microfono...", juce::dontSendNotification);
     deviceManager.addAudioCallback(&engine);
 
-    setSize(1280, 800);
+    // Keep the windowed preview aligned with the native Raspberry Pi touch display.
+    // Kiosk mode will still resize the component to the active X11 display bounds.
+    setSize(1920, 1200);
     selectSlot(0);
     refreshWifiLibrary(false);
     refreshSceneButtons();

@@ -36,6 +36,7 @@ target_sources(Mela PRIVATE
     Source/UI/WaveformEditor.cpp
     Source/UI/EffectPanel.cpp
     Source/UI/TouchKeyboard.cpp
+    Source/UI/TouchSampleBrowser.cpp
     Source/UI/MelaLookAndFeel.cpp
 )
 

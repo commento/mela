@@ -40,6 +40,11 @@ MainComponent::MainComponent()
 {
     setLookAndFeel(&melaLookAndFeel);
     setOpaque(true);
+    addChildComponent(sampleBrowser);
+    sampleBrowser.onFileChosen = [this](const juce::File& file)
+    {
+        loadFileIntoActiveSlot(file);
+    };
 
     for (auto* component : std::array<juce::Component*, 11> {
              &playButton, &stopButton, &stopAllButton,
@@ -780,7 +785,7 @@ void MainComponent::resized()
     const auto scaleY = static_cast<float>(getHeight()) / static_cast<float>(designHeight);
     for (auto* child : getChildren())
     {
-        if (! child->isVisible())
+        if (! child->isVisible() || child == &sampleBrowser)
             continue;
 
         const auto bounds = child->getBounds().toFloat();
@@ -790,51 +795,37 @@ void MainComponent::resized()
                                                 bounds.getHeight() * scaleY)
                              .toNearestInt());
     }
+
+    sampleBrowser.setBounds(getLocalBounds());
 }
 
 void MainComponent::chooseFile()
 {
-    // The Raspberry Pi kiosk runs directly under Xorg, without a desktop
-    // environment. A native chooser may therefore try to launch an external
-    // portal/application that never becomes visible. JUCE's own chooser stays
-    // inside Mela and receives taps like the rest of the interface.
-   #if JUCE_LINUX
-    constexpr bool useNativeFileChooser = false;
-   #else
-    constexpr bool useNativeFileChooser = true;
-   #endif
-
     wifiInboxDirectory.createDirectory();
-    fileChooser = std::make_unique<juce::FileChooser>(
-        "Scegli un sample dalla Mela Inbox", wifiInboxDirectory,
-        "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3", useNativeFileChooser);
-    fileChooser->launchAsync(juce::FileBrowserComponent::openMode
-                                 | juce::FileBrowserComponent::canSelectFiles,
-                             [this](const juce::FileChooser& chooser)
-    {
-        const auto file = chooser.getResult();
-        if (file == juce::File {})
-            return;
+    refreshWifiLibrary(false);
+    sampleBrowser.showFiles(wifiFiles);
+}
 
-        juce::String error;
-        if (engine.loadFile(activeSlot, file, error))
-        {
-            slotSourceFiles[static_cast<size_t>(activeSlot)] = file;
-            slotSourceIsRecording[static_cast<size_t>(activeSlot)] = false;
-            auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
-            settings.trimStart = 0.0;
-            settings.trimEnd = 1.0;
-            waveform.setClip(engine.getClipForDisplay(activeSlot));
-            clipName.setText(engine.getClipName(activeSlot), juce::dontSendNotification);
-            statusLabel.setText("Sample " + juce::String(activeSlot + 1)
-                                + ": " + file.getFileName(), juce::dontSendNotification);
-            updateSlotButtonColours();
-        }
-        else
-        {
-            statusLabel.setText("Errore: " + error, juce::dontSendNotification);
-        }
-    });
+void MainComponent::loadFileIntoActiveSlot(const juce::File& file)
+{
+    juce::String error;
+    if (engine.loadFile(activeSlot, file, error))
+    {
+        slotSourceFiles[static_cast<size_t>(activeSlot)] = file;
+        slotSourceIsRecording[static_cast<size_t>(activeSlot)] = false;
+        auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
+        settings.trimStart = 0.0;
+        settings.trimEnd = 1.0;
+        waveform.setClip(engine.getClipForDisplay(activeSlot));
+        clipName.setText(engine.getClipName(activeSlot), juce::dontSendNotification);
+        statusLabel.setText("Sample " + juce::String(activeSlot + 1)
+                            + ": " + file.getFileName(), juce::dontSendNotification);
+        updateSlotButtonColours();
+    }
+    else
+    {
+        statusLabel.setText("Errore: " + error, juce::dontSendNotification);
+    }
 }
 
 void MainComponent::deleteActiveSample()

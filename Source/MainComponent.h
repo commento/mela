@@ -7,6 +7,7 @@
 #include "UI/MelaLookAndFeel.h"
 #include "UI/TouchSlider.h"
 #include "UI/TouchKeyboard.h"
+#include "UI/TouchSampleBrowser.h"
 #include "UI/WaveformEditor.h"
 #include <array>
 #include <atomic>
@@ -80,6 +81,7 @@ private:
     };
 
     void chooseFile();
+    void loadFileIntoActiveSlot(const juce::File& file);
     void deleteActiveSample();
     void clearActiveSlotAfterDelete();
     void toggleRecording();
@@ -118,6 +120,7 @@ private:
     bool writeSceneFile(const juce::File& file, const juce::var& state) const;
 
     MelaLookAndFeel melaLookAndFeel;
+    TouchSampleBrowser sampleBrowser;
     LinuxMultiTouchInput multiTouchInput;
     juce::AudioDeviceManager deviceManager;
     LoopEngine engine;
@@ -239,7 +242,5 @@ private:
     juce::Label delaySendLabel;
     juce::Label reverbSendLabel;
     juce::Label dspLoadLabel;
-    std::unique_ptr<juce::FileChooser> fileChooser;
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

@@ -37,7 +37,8 @@ public:
     }
 
 private:
-    class MainWindow final : public juce::DocumentWindow
+    class MainWindow final : public juce::DocumentWindow,
+                             private juce::Timer
     {
     public:
         MainWindow(const juce::String& name, bool useKioskMode)
@@ -61,8 +62,9 @@ private:
            #if JUCE_LINUX
             if (useKioskMode)
             {
-                setMouseCursor(juce::MouseCursor(juce::MouseCursor::NoCursor));
                 juce::Desktop::getInstance().setKioskModeComponent(this, false);
+                hideKioskCursor();
+                startTimer(250);
             }
             else
             {
@@ -79,6 +81,24 @@ private:
         {
             juce::JUCEApplication::getInstance()->systemRequestedQuit();
         }
+
+    private:
+        void timerCallback() override
+        {
+           #if JUCE_LINUX
+            hideKioskCursor();
+           #endif
+        }
+
+       #if JUCE_LINUX
+        void hideKioskCursor()
+        {
+            const auto hiddenCursor = juce::MouseCursor(juce::MouseCursor::NoCursor);
+            setMouseCursor(hiddenCursor);
+            for (auto& source : juce::Desktop::getInstance().getMouseSources())
+                source.showMouseCursor(hiddenCursor);
+        }
+       #endif
     };
 
     std::unique_ptr<MainWindow> mainWindow;

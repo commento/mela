@@ -6,8 +6,10 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 
 - quattro slot indipendenti e riproducibili contemporaneamente;
 - pagina AUDIO iniziale per scegliere ingresso, uscita, sample rate e buffer;
-- pagina WIFI per importare negli slot i sample ricevuti da telefono o computer;
-- eliminazione con conferma dei sample presenti nella Mela Inbox;
+- pagina WIFI con libreria Mela Inbox per importare MP3, WAV e gli altri formati supportati;
+- pagina RETE separata per cercare le reti disponibili e connettere Mela alla rete di casa;
+- password Wi-Fi protetta, stato della connessione e IP locale per Pi Connect;
+- tastiera Wi-Fi completa a schermo, utilizzabile senza tastiera fisica;
 - registrazione diretta nello slot attivo dal microfono integrato o da un ingresso USB;
 - registrazioni WAV a 24 bit salvate in `Musica/Mela Recordings` e caricate automaticamente;
 - pulsante `ELIMINA SAMPLE`: svuota lo slot e, per le registrazioni fatte da Mela,
@@ -80,68 +82,41 @@ scheda USB e l'uscita desiderata, quindi premere `APRI I SAMPLE`. Nella pagina
 LOOP, `REC` registra nello slot selezionato e `STOP REC` chiude il WAV e lo rende
 subito disponibile nell'editor della forma d'onda.
 
-## Caricamento sample via Wi-Fi
+## Connessione alla rete Wi-Fi di casa
 
-### Test su macOS
+Sul Raspberry Pi aprire la pagina `RETE`, premere `CERCA RETI`, scegliere la rete
+di casa, inserire la password e premere `CONNETTI`. La scansione e la connessione
+avvengono in background e non bloccano il motore audio. Quando la pagina mostra
+`CONNESSO`, visualizza anche l'IP locale e la rete e' pronta per Pi Connect, se il
+relativo servizio e' gia' installato e associato all'account.
 
-Avviare il servizio in un terminale e lasciarlo aperto:
+La configurazione usa NetworkManager tramite `nmcli`, incluso in Raspberry Pi OS
+Bookworm. Su macOS la pagina e' disponibile come anteprima ma non modifica la rete.
 
-```sh
-./wifi/run-mac.sh
-```
+## Caricamento sample nella Mela Inbox
 
-Al primo avvio vengono installate le dipendenze Python in un ambiente isolato
-dentro `wifi/mela_upload/.venv`. Avviare poi `Mela.app`, aprire la pagina `WIFI`
-e visitare dal browser `http://localhost:8080`. Per provare da telefono, Mac e
-telefono devono essere sulla stessa rete; usare l'indirizzo `.local` o l'IP
-mostrato da Mela. macOS potrebbe chiedere di consentire le connessioni in entrata.
+La pagina `WIFI` continua a mostrare l'indirizzo e il PIN del servizio di upload.
+Dal telefono o dal computer, sulla stessa rete di Mela:
 
-I file di test reali vengono salvati in `~/Music/Mela Inbox` e il PIN in
-`~/.config/mela/upload-pin.txt`.
+1. aprire l'indirizzo mostrato, normalmente `http://nome-raspberry.local:8080`;
+2. inserire il PIN a sei cifre;
+3. caricare un file WAV, AIFF, FLAC, OGG o MP3;
+4. aggiornare la libreria e scegliere `CARICA IN S1-S4`.
 
-### Installazione su Raspberry Pi
-
-Sul Raspberry Pi, dalla cartella del progetto, installare una volta il servizio:
-
-```sh
-sudo ./deploy/raspberry-pi/install-upload-service.sh
-```
-
-Lo script installa un servizio separato dal motore audio, lo avvia automaticamente
-e pubblica la pagina sulla rete locale tramite Avahi. Nella pagina `WIFI` di Mela
-sono mostrati l'indirizzo da aprire e il PIN a sei cifre. Dal telefono o dal Mac:
-
-1. aprire l'indirizzo indicato, normalmente `http://nome-raspberry.local:8080`;
-2. inserire il PIN mostrato da Mela;
-3. inviare un file WAV, AIFF, FLAC, OGG o MP3;
-4. scegliere il file nella `Mela Inbox` e premere `CARICA IN S1-S4`.
-
-Gli upload sono limitati a 250 MB e vengono scritti prima come file temporanei.
-Il sample compare nella libreria soltanto a trasferimento concluso. Il servizio
-gira con priorita CPU e disco ridotta per non interferire con l'audio real-time.
-
-Per controllarne lo stato sul Raspberry:
-
-```sh
-systemctl status mela-upload.service
-```
-
-Per aggiornare un servizio gia' installato dopo avere portato sul Raspberry la
-nuova versione del progetto, rieseguire lo stesso script. I file del server e
-la unit systemd vengono aggiornati e `mela-upload.service` viene riavviato:
+Sul Raspberry Pi il servizio si installa o aggiorna con:
 
 ```sh
 sudo ./deploy/raspberry-pi/install-upload-service.sh
 ```
 
-Il supporto MP3 richiede anche una nuova build dell'app Mela, non soltanto
-l'aggiornamento del server di upload.
+I file ricevuti vengono conservati in `~/Music/Mela Inbox`. Dalla pagina `WIFI`
+possono essere caricati negli slot oppure eliminati con conferma.
 
 ## Avvio kiosk su Raspberry Pi
 
 Per il dispositivo finale e' consigliato Raspberry Pi OS Lite 64 bit: Mela usa
 direttamente Xorg senza desktop environment o window manager. Dopo avere creato
-la build Release e installato il servizio Wi-Fi:
+la build Release e installato il servizio Inbox:
 
 ```sh
 cmake -S . -B build-pi -DCMAKE_BUILD_TYPE=Release

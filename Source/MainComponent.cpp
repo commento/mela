@@ -6,6 +6,34 @@ namespace
 {
 constexpr int designWidth = 1280;
 constexpr int designHeight = 800;
+
+#if JUCE_LINUX
+struct CommandResult
+{
+    bool started = false;
+    bool finished = false;
+    int exitCode = -1;
+    juce::String output;
+};
+
+CommandResult runCommand(const juce::StringArray& arguments, int timeoutMs)
+{
+    juce::ChildProcess process;
+    CommandResult result;
+    result.started = process.start(arguments,
+        juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr);
+    if (! result.started)
+        return result;
+
+    result.finished = process.waitForProcessToFinish(timeoutMs);
+    if (! result.finished)
+        process.kill();
+    result.output = process.readAllProcessOutput().trim();
+    if (result.finished)
+        result.exitCode = static_cast<int>(process.getExitCode());
+    return result;
+}
+#endif
 }
 
 MainComponent::MainComponent()
@@ -13,9 +41,9 @@ MainComponent::MainComponent()
     setLookAndFeel(&melaLookAndFeel);
     setOpaque(true);
 
-    for (auto* component : std::array<juce::Component*, 10> {
+    for (auto* component : std::array<juce::Component*, 11> {
              &playButton, &stopButton, &stopAllButton,
-             &audioPageButton, &wifiPageButton, &loopPageButton,
+             &audioPageButton, &wifiPageButton, &networkPageButton, &loopPageButton,
              &keysPageButton, &effectsPageButton, &scenesPageButton,
              &statusLabel })
         addAndMakeVisible(component);
@@ -38,28 +66,27 @@ MainComponent::MainComponent()
     audioInfoLabel.setFont(juce::FontOptions(17.0f));
 
     for (auto* component : std::array<juce::Component*, 7> {
-             &wifiInfoLabel, &wifiAddressLabel, &wifiPinLabel,
-             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton, &wifiDeleteButton })
+             &wifiLibraryInfoLabel, &wifiAddressLabel, &wifiPinLabel,
+             &wifiInboxLabel, &wifiFileBox, &wifiLibraryRefreshButton, &wifiDeleteButton })
         addAndMakeVisible(component);
     wifiInboxDirectory = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
                              .getChildFile("Mela Inbox");
     wifiInboxDirectory.createDirectory();
-    wifiInfoLabel.setText(
+    wifiLibraryInfoLabel.setText(
         "Dal telefono o dal Mac apri l'indirizzo qui sotto, inserisci il PIN e carica "
         "un sample. Il file apparira' in questa libreria.",
         juce::dontSendNotification);
-    wifiInfoLabel.setJustificationType(juce::Justification::centred);
-    wifiInfoLabel.setFont(juce::FontOptions(17.0f));
+    wifiLibraryInfoLabel.setJustificationType(juce::Justification::centred);
+    wifiLibraryInfoLabel.setFont(juce::FontOptions(17.0f));
     wifiAddressLabel.setJustificationType(juce::Justification::centred);
     wifiPinLabel.setJustificationType(juce::Justification::centred);
     wifiPinLabel.setFont(juce::FontOptions(25.0f, juce::Font::bold));
     wifiInboxLabel.setJustificationType(juce::Justification::centredLeft);
     wifiFileBox.setTextWhenNothingSelected("Nessun sample nella Inbox");
     wifiFileBox.setTextWhenNoChoicesAvailable("Nessun sample nella Inbox");
-    wifiRefreshButton.onClick = [this] { refreshWifiLibrary(true); };
+    wifiLibraryRefreshButton.onClick = [this] { refreshWifiLibrary(true); };
     wifiDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
     wifiDeleteButton.onClick = [this] { deleteSelectedWifiSample(); };
-
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {
         auto& button = wifiLoadButtons[static_cast<size_t>(slot)];
@@ -67,6 +94,74 @@ MainComponent::MainComponent()
         button.onClick = [this, slot] { loadWifiSampleIntoSlot(slot); };
         addAndMakeVisible(button);
     }
+
+    for (auto* component : std::array<juce::Component*, 10> {
+             &wifiInfoLabel, &wifiStatusLabel, &wifiNetworkLabel, &wifiNetworkBox,
+             &wifiPasswordLabel, &wifiPasswordEditor, &wifiShowPasswordButton,
+             &wifiShiftButton, &wifiRefreshButton, &wifiConnectButton })
+        addAndMakeVisible(component);
+    wifiInfoLabel.setText(
+        "Connetti Mela alla rete Wi-Fi di casa. Quando compare CONNESSO, "
+        "il Raspberry Pi puo' essere raggiunto con Pi Connect.",
+        juce::dontSendNotification);
+    wifiInfoLabel.setJustificationType(juce::Justification::centred);
+    wifiInfoLabel.setFont(juce::FontOptions(17.0f));
+    wifiStatusLabel.setJustificationType(juce::Justification::centred);
+    wifiStatusLabel.setFont(juce::FontOptions(24.0f, juce::Font::bold));
+    wifiNetworkLabel.setText("RETE WIFI", juce::dontSendNotification);
+    wifiNetworkLabel.setJustificationType(juce::Justification::centredLeft);
+    wifiNetworkBox.setTextWhenNothingSelected("Premi CERCA RETI");
+    wifiNetworkBox.setTextWhenNoChoicesAvailable("Nessuna rete trovata");
+    wifiPasswordLabel.setText("PASSWORD", juce::dontSendNotification);
+    wifiPasswordLabel.setJustificationType(juce::Justification::centredLeft);
+    wifiPasswordEditor.setPasswordCharacter(0x2022);
+    wifiPasswordEditor.setTextToShowWhenEmpty("Password della rete di casa",
+                                               MelaColours::ink.withAlpha(0.45f));
+    wifiShowPasswordButton.onClick = [this]
+    {
+        wifiPasswordEditor.setPasswordCharacter(
+            wifiShowPasswordButton.getToggleState() ? 0 : 0x2022);
+    };
+    for (int index = 0; index < static_cast<int>(wifiKeyboardButtons.size()); ++index)
+    {
+        auto& button = wifiKeyboardButtons[static_cast<size_t>(index)];
+        button.onClick = [this, index]
+        {
+            static const juce::StringArray keys {
+                "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+                "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+                "a", "s", "d", "f", "g", "h", "j", "k", "l",
+                "z", "x", "c", "v", "b", "n", "m", "_", "-", ".", "@", "!", "#"
+            };
+            if (index < keys.size())
+            {
+                auto key = keys[index];
+                if (wifiShiftButton.getToggleState() && key.containsOnly("abcdefghijklmnopqrstuvwxyz"))
+                    key = key.toUpperCase();
+                wifiPasswordEditor.insertTextAtCaret(key);
+            }
+            else if (index == 42)
+                wifiPasswordEditor.insertTextAtCaret(" ");
+            else if (index == 43)
+            {
+                const auto caret = wifiPasswordEditor.getCaretPosition();
+                if (caret > 0)
+                {
+                    wifiPasswordEditor.setHighlightedRegion({ caret - 1, caret });
+                    wifiPasswordEditor.insertTextAtCaret({});
+                }
+            }
+            else
+                wifiPasswordEditor.clear();
+            wifiPasswordEditor.grabKeyboardFocus();
+        };
+        addAndMakeVisible(button);
+    }
+    wifiShiftButton.onClick = [this] { updateWifiKeyboardLabels(); };
+    updateWifiKeyboardLabels();
+    wifiRefreshButton.onClick = [this] { refreshWifiNetworks(true); };
+    wifiConnectButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
+    wifiConnectButton.onClick = [this] { connectSelectedWifiNetwork(); };
 
     scenesDirectory = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                           .getChildFile("Mela/Scenes");
@@ -152,6 +247,7 @@ MainComponent::MainComponent()
     recordButton.onClick = [this] { toggleRecording(); };
     audioPageButton.onClick = [this] { showPage(Page::audio); };
     wifiPageButton.onClick = [this] { showPage(Page::wifi); };
+    networkPageButton.onClick = [this] { showPage(Page::network); };
     loopPageButton.onClick = [this] { showPage(Page::loop); };
     keysPageButton.onClick = [this] { showPage(Page::keys); };
     effectsPageButton.onClick = [this] { showPage(Page::effects); };
@@ -441,12 +537,13 @@ void MainComponent::paint(juce::Graphics& graphics)
                          .withHeight(30.0f));
     const auto title = currentPage == Page::audio ? "MELA - AUDIO SETUP"
                      : currentPage == Page::wifi ? "MELA - WIFI LIBRARY"
+                     : currentPage == Page::network ? "MELA - WIFI DI CASA"
                      : currentPage == Page::loop ? "MELA - 4 LOOP EDITOR"
                      : currentPage == Page::keys ? "MELA - SAMPLE KEYS"
                      : currentPage == Page::effects ? "MELA - EFFETTI"
                                                     : "MELA - SCENE";
     graphics.drawText(title,
-                      24, 12, designWidth - 650, 42, juce::Justification::centredLeft);
+                      24, 12, designWidth - 700, 42, juce::Justification::centredLeft);
     const auto panel = juce::Rectangle<int>(0, 0, designWidth, designHeight)
                            .reduced(24).withTrimmedTop(60)
                            .withTrimmedBottom(82).toFloat();
@@ -465,15 +562,17 @@ void MainComponent::resized()
     // touch display, producing an exact 1.5x enlargement of every touch target.
     auto outer = juce::Rectangle<int>(0, 0, designWidth, designHeight).reduced(24);
     auto header = outer.removeFromTop(60);
-    scenesPageButton.setBounds(header.removeFromRight(100).reduced(4));
-    effectsPageButton.setBounds(header.removeFromRight(100).reduced(4));
-    keysPageButton.setBounds(header.removeFromRight(100).reduced(4));
-    loopPageButton.setBounds(header.removeFromRight(100).reduced(4));
-    wifiPageButton.setBounds(header.removeFromRight(100).reduced(4));
-    audioPageButton.setBounds(header.removeFromRight(100).reduced(4));
+    scenesPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    effectsPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    keysPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    loopPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    wifiPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    networkPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    audioPageButton.setBounds(header.removeFromRight(90).reduced(4));
 
     auto footer = outer.removeFromBottom(76);
     if (currentPage != Page::audio && currentPage != Page::wifi
+        && currentPage != Page::network
         && currentPage != Page::scenes)
     {
         playButton.setBounds(footer.removeFromLeft(165).reduced(5));
@@ -493,14 +592,14 @@ void MainComponent::resized()
     }
     else if (currentPage == Page::wifi)
     {
-        wifiInfoLabel.setBounds(content.removeFromTop(66).reduced(18, 4));
+        wifiLibraryInfoLabel.setBounds(content.removeFromTop(66).reduced(18, 4));
         wifiAddressLabel.setBounds(content.removeFromTop(48).reduced(12, 3));
         wifiPinLabel.setBounds(content.removeFromTop(52).reduced(12, 3));
         content.removeFromTop(12);
         wifiInboxLabel.setBounds(content.removeFromTop(34).reduced(8, 2));
         auto fileRow = content.removeFromTop(62);
         wifiDeleteButton.setBounds(fileRow.removeFromRight(150).reduced(5));
-        wifiRefreshButton.setBounds(fileRow.removeFromRight(150).reduced(5));
+        wifiLibraryRefreshButton.setBounds(fileRow.removeFromRight(150).reduced(5));
         wifiFileBox.setBounds(fileRow.reduced(5, 8));
         content.removeFromTop(20);
         auto loadRow = content.removeFromTop(72);
@@ -508,6 +607,40 @@ void MainComponent::resized()
         for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
             wifiLoadButtons[static_cast<size_t>(slot)].setBounds(
                 loadRow.removeFromLeft(buttonWidth).reduced(6));
+    }
+    else if (currentPage == Page::network)
+    {
+        wifiInfoLabel.setBounds(content.removeFromTop(52).reduced(18, 2));
+        wifiStatusLabel.setBounds(content.removeFromTop(52).reduced(18, 2));
+        content.removeFromTop(6);
+        auto form = content.removeFromTop(132).reduced(95, 0);
+        auto networkRow = form.removeFromTop(66);
+        wifiNetworkLabel.setBounds(networkRow.removeFromLeft(125).reduced(5, 9));
+        wifiRefreshButton.setBounds(networkRow.removeFromRight(190).reduced(6, 5));
+        wifiNetworkBox.setBounds(networkRow.reduced(6, 9));
+        auto passwordRow = form.removeFromTop(66);
+        wifiPasswordLabel.setBounds(passwordRow.removeFromLeft(125).reduced(5, 9));
+        wifiShowPasswordButton.setBounds(passwordRow.removeFromRight(210).reduced(8, 9));
+        wifiPasswordEditor.setBounds(passwordRow.reduced(6, 9));
+        content.removeFromTop(8);
+        auto keyboard = content.reduced(35, 0);
+        constexpr std::array<int, 4> rowSizes { 10, 10, 9, 13 };
+        int keyIndex = 0;
+        for (const auto rowSize : rowSizes)
+        {
+            auto row = keyboard.removeFromTop(43);
+            const auto keyWidth = row.getWidth() / rowSize;
+            for (int column = 0; column < rowSize; ++column)
+                wifiKeyboardButtons[static_cast<size_t>(keyIndex++)].setBounds(
+                    row.removeFromLeft(keyWidth).reduced(3));
+            keyboard.removeFromTop(2);
+        }
+        auto actionRow = keyboard.removeFromTop(54).reduced(90, 1);
+        wifiShiftButton.setBounds(actionRow.removeFromLeft(170).reduced(4));
+        wifiKeyboardButtons[42].setBounds(actionRow.removeFromLeft(270).reduced(4));
+        wifiKeyboardButtons[43].setBounds(actionRow.removeFromLeft(170).reduced(4));
+        wifiKeyboardButtons[44].setBounds(actionRow.removeFromLeft(170).reduced(4));
+        wifiConnectButton.setBounds(actionRow.reduced(4));
     }
     else if (currentPage == Page::scenes)
     {
@@ -942,7 +1075,6 @@ void MainComponent::loadWifiSampleIntoSlot(int slotIndex)
 
     slotSourceFiles[static_cast<size_t>(slotIndex)] = file;
     slotSourceIsRecording[static_cast<size_t>(slotIndex)] = false;
-
     auto& settings = slotSettings[static_cast<size_t>(slotIndex)];
     settings.trimStart = 0.0;
     settings.trimEnd = 1.0;
@@ -988,6 +1120,194 @@ void MainComponent::deleteSelectedWifiSample()
         }));
 }
 
+void MainComponent::setWifiBusy(bool busy, const juce::String& message)
+{
+    wifiBusy.store(busy);
+    wifiNetworkBox.setEnabled(! busy);
+    wifiPasswordEditor.setEnabled(! busy);
+    wifiShowPasswordButton.setEnabled(! busy);
+    wifiShiftButton.setEnabled(! busy);
+    wifiRefreshButton.setEnabled(! busy);
+    wifiConnectButton.setEnabled(! busy);
+    for (auto& button : wifiKeyboardButtons)
+        button.setEnabled(! busy);
+    wifiStatusLabel.setText(message, juce::dontSendNotification);
+    statusLabel.setText(message, juce::dontSendNotification);
+}
+
+void MainComponent::updateWifiKeyboardLabels()
+{
+    static const juce::StringArray keys {
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+        "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+        "a", "s", "d", "f", "g", "h", "j", "k", "l",
+        "z", "x", "c", "v", "b", "n", "m", "_", "-", ".", "@", "!", "#"
+    };
+    for (int index = 0; index < keys.size(); ++index)
+    {
+        auto text = keys[index];
+        if (wifiShiftButton.getToggleState() && text.containsOnly("abcdefghijklmnopqrstuvwxyz"))
+            text = text.toUpperCase();
+        wifiKeyboardButtons[static_cast<size_t>(index)].setButtonText(text);
+    }
+    wifiKeyboardButtons[42].setButtonText("SPAZIO");
+    wifiKeyboardButtons[43].setButtonText("CANCELLA");
+    wifiKeyboardButtons[44].setButtonText("SVUOTA");
+}
+
+void MainComponent::refreshWifiNetworks(bool announceResult)
+{
+    if (wifiBusy.exchange(true))
+        return;
+
+#if JUCE_LINUX
+    setWifiBusy(true, "RICERCA RETI WIFI...");
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::Thread::launch([safeThis, announceResult]
+    {
+        const auto result = runCommand({ "nmcli", "--escape", "no", "-t", "-f",
+                                         "SSID", "device", "wifi", "list", "--rescan", "yes" },
+                                       20000);
+        juce::StringArray networks;
+        if (result.started && result.finished && result.exitCode == 0)
+        {
+            networks.addLines(result.output);
+            networks.trim();
+            networks.removeEmptyStrings();
+            networks.removeDuplicates(false);
+        }
+
+        juce::MessageManager::callAsync([safeThis, announceResult, result, networks]
+        {
+            if (safeThis == nullptr)
+                return;
+            const auto previous = safeThis->wifiNetworkBox.getText();
+            safeThis->wifiNetworks.assign(networks.begin(), networks.end());
+            safeThis->wifiNetworkBox.clear(juce::dontSendNotification);
+            int selectedId = 0;
+            for (int index = 0; index < networks.size(); ++index)
+            {
+                safeThis->wifiNetworkBox.addItem(networks[index], index + 1);
+                if (networks[index] == previous)
+                    selectedId = index + 1;
+            }
+            if (selectedId == 0 && ! networks.isEmpty())
+                selectedId = 1;
+            safeThis->wifiNetworkBox.setSelectedId(selectedId, juce::dontSendNotification);
+
+            if (! result.started)
+                safeThis->setWifiBusy(false, "NETWORKMANAGER NON DISPONIBILE");
+            else if (! result.finished)
+                safeThis->setWifiBusy(false, "RICERCA WIFI SCADUTA");
+            else if (result.exitCode != 0)
+                safeThis->setWifiBusy(false, "ERRORE WIFI: " + result.output);
+            else
+                safeThis->setWifiBusy(false, juce::String(networks.size()) + " RETI TROVATE");
+            if (! announceResult)
+                safeThis->updateWifiStatus();
+        });
+    });
+#else
+    wifiBusy.store(false);
+    setWifiBusy(false, "CONFIGURAZIONE DISPONIBILE SUL RASPBERRY PI");
+    juce::ignoreUnused(announceResult);
+#endif
+}
+
+void MainComponent::connectSelectedWifiNetwork()
+{
+    const auto networkIndex = wifiNetworkBox.getSelectedId() - 1;
+    if (! juce::isPositiveAndBelow(networkIndex, static_cast<int>(wifiNetworks.size())))
+    {
+        setWifiBusy(false, "SCEGLI PRIMA UNA RETE WIFI");
+        return;
+    }
+    if (wifiBusy.exchange(true))
+        return;
+
+    const auto ssid = wifiNetworks[static_cast<size_t>(networkIndex)];
+    const auto password = wifiPasswordEditor.getText();
+#if JUCE_LINUX
+    setWifiBusy(true, "CONNESSIONE A " + ssid + "...");
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::Thread::launch([safeThis, ssid, password]
+    {
+        juce::StringArray arguments { "nmcli", "device", "wifi", "connect", ssid };
+        if (password.isNotEmpty())
+        {
+            arguments.add("password");
+            arguments.add(password);
+        }
+        const auto result = runCommand(arguments, 45000);
+        juce::MessageManager::callAsync([safeThis, ssid, result]
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->wifiPasswordEditor.clear();
+            if (! result.started)
+                safeThis->setWifiBusy(false, "NETWORKMANAGER NON DISPONIBILE");
+            else if (! result.finished)
+                safeThis->setWifiBusy(false, "CONNESSIONE SCADUTA: RIPROVA");
+            else if (result.exitCode != 0)
+                safeThis->setWifiBusy(false, "CONNESSIONE FALLITA: CONTROLLA LA PASSWORD");
+            else
+            {
+                safeThis->setWifiBusy(false, "CONNESSO A " + ssid);
+                safeThis->updateWifiStatus();
+            }
+        });
+    });
+#else
+    wifiBusy.store(false);
+    setWifiBusy(false, "CONFIGURAZIONE DISPONIBILE SUL RASPBERRY PI");
+#endif
+}
+
+void MainComponent::updateWifiStatus()
+{
+    if (wifiBusy.load())
+        return;
+
+#if JUCE_LINUX
+    if (wifiBusy.exchange(true))
+        return;
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::Thread::launch([safeThis]
+    {
+        const auto result = runCommand({ "nmcli", "--escape", "no", "-t", "-f",
+                                         "TYPE,STATE,CONNECTION", "device" }, 5000);
+        juce::String connectedNetwork;
+        if (result.started && result.finished && result.exitCode == 0)
+        {
+            juce::StringArray lines;
+            lines.addLines(result.output);
+            for (const auto& line : lines)
+                if (line.startsWith("wifi:connected:"))
+                {
+                    connectedNetwork = line.fromFirstOccurrenceOf("wifi:connected:", false, false);
+                    break;
+                }
+        }
+        const auto localAddress = juce::IPAddress::getLocalAddress(false).toString();
+        juce::MessageManager::callAsync([safeThis, result, connectedNetwork, localAddress]
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->wifiBusy.store(false);
+            if (connectedNetwork.isNotEmpty())
+                safeThis->setWifiBusy(false, "CONNESSO A " + connectedNetwork
+                    + "  •  IP " + localAddress + "  •  RETE PRONTA PER PI CONNECT");
+            else if (! result.started)
+                safeThis->setWifiBusy(false, "NETWORKMANAGER NON DISPONIBILE");
+            else
+                safeThis->setWifiBusy(false, "NON CONNESSO");
+        });
+    });
+#else
+    setWifiBusy(false, "ANTEPRIMA MAC • CONFIGURAZIONE SUL RASPBERRY PI");
+#endif
+}
+
 void MainComponent::timerCallback()
 {
     deleteSampleButton.setEnabled(engine.hasClip(activeSlot) && ! engine.isRecording());
@@ -1001,10 +1321,14 @@ void MainComponent::timerCallback()
     }
     waveform.setPlayhead(engine.getPlayheadNormalised(activeSlot));
     updateSlotButtonColours();
-    if (currentPage == Page::wifi && ++wifiRefreshTicks >= 40)
+    if ((currentPage == Page::wifi || currentPage == Page::network)
+        && ++wifiRefreshTicks >= 40)
     {
         wifiRefreshTicks = 0;
-        refreshWifiLibrary(false);
+        if (currentPage == Page::wifi)
+            refreshWifiLibrary(false);
+        else
+            updateWifiStatus();
     }
     if (++autosaveTicks >= 100)
     {
@@ -1200,6 +1524,7 @@ void MainComponent::showPage(Page pageToShow)
     currentPage = pageToShow;
     const auto showAudio = currentPage == Page::audio;
     const auto showWifi = currentPage == Page::wifi;
+    const auto showNetwork = currentPage == Page::network;
     const auto showLoop = currentPage == Page::loop;
     const auto showKeys = currentPage == Page::keys;
     const auto showScenes = currentPage == Page::scenes;
@@ -1215,15 +1540,27 @@ void MainComponent::showPage(Page pageToShow)
     if (audioDeviceSelector != nullptr)
         audioDeviceSelector->setVisible(showAudio);
     for (auto* component : std::array<juce::Component*, 7> {
-             &wifiInfoLabel, &wifiAddressLabel, &wifiPinLabel,
-             &wifiInboxLabel, &wifiFileBox, &wifiRefreshButton, &wifiDeleteButton })
+             &wifiLibraryInfoLabel, &wifiAddressLabel, &wifiPinLabel,
+             &wifiInboxLabel, &wifiFileBox, &wifiLibraryRefreshButton, &wifiDeleteButton })
         component->setVisible(showWifi);
     for (auto& button : wifiLoadButtons)
         button.setVisible(showWifi);
+    for (auto* component : std::array<juce::Component*, 10> {
+             &wifiInfoLabel, &wifiStatusLabel, &wifiNetworkLabel, &wifiNetworkBox,
+             &wifiPasswordLabel, &wifiPasswordEditor, &wifiShowPasswordButton,
+             &wifiShiftButton, &wifiRefreshButton, &wifiConnectButton })
+        component->setVisible(showNetwork);
+    for (auto& button : wifiKeyboardButtons)
+        button.setVisible(showNetwork);
     if (showWifi)
     {
         wifiRefreshTicks = 0;
         refreshWifiLibrary(false);
+    }
+    if (showNetwork)
+    {
+        wifiRefreshTicks = 0;
+        updateWifiStatus();
     }
     clipName.setVisible(showLoop || showKeys);
     for (auto* component : std::array<juce::Component*, 14> {
@@ -1243,7 +1580,7 @@ void MainComponent::showPage(Page pageToShow)
         component->setVisible(showScenes);
     updateEffectPageVisibility();
 
-    const auto showTransport = ! showAudio && ! showWifi && ! showScenes;
+    const auto showTransport = ! showAudio && ! showWifi && ! showNetwork && ! showScenes;
     playButton.setVisible(showTransport);
     stopButton.setVisible(showTransport);
     stopAllButton.setVisible(showTransport);
@@ -1251,6 +1588,8 @@ void MainComponent::showPage(Page pageToShow)
         showAudio ? MelaColours::sky : MelaColours::panelDark);
     wifiPageButton.setColour(juce::TextButton::buttonColourId,
         showWifi ? MelaColours::sky : MelaColours::panelDark);
+    networkPageButton.setColour(juce::TextButton::buttonColourId,
+        showNetwork ? MelaColours::sky : MelaColours::panelDark);
     loopPageButton.setColour(juce::TextButton::buttonColourId,
         showLoop ? MelaColours::sky : MelaColours::panelDark);
     keysPageButton.setColour(juce::TextButton::buttonColourId,

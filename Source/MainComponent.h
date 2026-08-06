@@ -8,6 +8,7 @@
 #include "UI/TouchKeyboard.h"
 #include "UI/WaveformEditor.h"
 #include <array>
+#include <atomic>
 #include <optional>
 #include <vector>
 
@@ -26,6 +27,7 @@ private:
     {
         audio,
         wifi,
+        network,
         loop,
         keys,
         effects,
@@ -85,6 +87,11 @@ private:
     void refreshWifiLibrary(bool announceResult);
     void loadWifiSampleIntoSlot(int slotIndex);
     void deleteSelectedWifiSample();
+    void refreshWifiNetworks(bool announceResult);
+    void connectSelectedWifiNetwork();
+    void updateWifiStatus();
+    void setWifiBusy(bool busy, const juce::String& message);
+    void updateWifiKeyboardLabels();
     void timerCallback() override;
     void updateEnvelope();
     void updateEffects();
@@ -143,6 +150,7 @@ private:
     juce::TextButton stopAllButton { "STOP ALL" };
     juce::TextButton audioPageButton { "AUDIO" };
     juce::TextButton wifiPageButton { "WIFI" };
+    juce::TextButton networkPageButton { "RETE" };
     juce::TextButton loopPageButton { "LOOP" };
     juce::TextButton keysPageButton { "KEYS" };
     juce::TextButton effectsPageButton { "FX" };
@@ -181,16 +189,29 @@ private:
     juce::Label audioInfoLabel;
     juce::TextButton continueButton { "APRI I SAMPLE" };
     std::unique_ptr<juce::AudioDeviceSelectorComponent> audioDeviceSelector;
-    juce::Label wifiInfoLabel;
+    juce::Label wifiLibraryInfoLabel;
     juce::Label wifiAddressLabel;
     juce::Label wifiPinLabel;
     juce::Label wifiInboxLabel;
     juce::ComboBox wifiFileBox;
-    juce::TextButton wifiRefreshButton { "AGGIORNA" };
+    juce::TextButton wifiLibraryRefreshButton { "AGGIORNA" };
     juce::TextButton wifiDeleteButton { "ELIMINA" };
     std::array<juce::TextButton, LoopEngine::numberOfSlots> wifiLoadButtons;
     std::vector<juce::File> wifiFiles;
     juce::File wifiInboxDirectory;
+    juce::Label wifiInfoLabel;
+    juce::Label wifiStatusLabel;
+    juce::Label wifiNetworkLabel;
+    juce::ComboBox wifiNetworkBox;
+    juce::Label wifiPasswordLabel;
+    juce::TextEditor wifiPasswordEditor;
+    juce::ToggleButton wifiShowPasswordButton { "MOSTRA PASSWORD" };
+    juce::ToggleButton wifiShiftButton { "MAIUSC" };
+    juce::TextButton wifiRefreshButton { "CERCA RETI" };
+    juce::TextButton wifiConnectButton { "CONNETTI" };
+    std::array<juce::TextButton, 45> wifiKeyboardButtons;
+    std::vector<juce::String> wifiNetworks;
+    std::atomic_bool wifiBusy { false };
     int wifiRefreshTicks = 0;
 
     static constexpr int numberOfScenes = 8;

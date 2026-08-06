@@ -29,7 +29,8 @@ if [[ ! -x ${mela_binary} ]]; then
 fi
 
 apt-get update
-apt-get install -y xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils
+apt-get install -y network-manager xserver-xorg-core xserver-xorg-input-libinput \
+    xinit x11-xserver-utils
 
 install -d -m 0755 /opt/mela/bin
 install -m 0755 "${mela_binary}" /opt/mela/bin/Mela
@@ -37,7 +38,7 @@ install -m 0755 "${project_root}/deploy/raspberry-pi/start-mela-kiosk.sh" \
     /opt/mela/bin/start-mela-kiosk
 install -d -m 0700 "${state_directory}"
 
-for hardware_group in audio video input render; do
+for hardware_group in audio video input render netdev; do
     if getent group "${hardware_group}" >/dev/null; then
         usermod -aG "${hardware_group}" "${mela_user}"
     fi

@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -57,10 +58,11 @@ MainComponent::MainComponent()
         loadFileIntoActiveSlot(file);
     };
 
-    for (auto* component : std::array<juce::Component*, 12> {
+    for (auto* component : std::array<juce::Component*, 13> {
              &playButton, &stopButton, &stopAllButton,
              &audioPageButton, &wifiPageButton, &networkPageButton, &loopPageButton,
-             &keysPageButton, &effectsPageButton, &scenesPageButton, &powerButton,
+             &keysPageButton, &effectsPageButton, &performancePageButton,
+             &scenesPageButton, &powerButton,
              &statusLabel })
         addAndMakeVisible(component);
 
@@ -234,6 +236,20 @@ MainComponent::MainComponent()
              &delaySendSlider, &reverbSendSlider, &delaySendLabel, &reverbSendLabel })
         addAndMakeVisible(component);
     addAndMakeVisible(dspLoadLabel);
+    addAndMakeVisible(performancePad);
+    performancePad.onGesture = [this](bool active, float x, float y,
+                                      PerformancePad::Mode mode)
+    {
+        const auto sliceMs = 30.0f * std::pow(500.0f / 30.0f, 1.0f - x);
+        const auto mix = 0.25f + y * 0.75f;
+        const auto feedback = 0.72f + y * 0.28f;
+        engine.setStutter(active, sliceMs, mix, feedback, static_cast<int>(mode));
+        statusLabel.setText(active
+            ? "XY LIVE | slice " + juce::String(sliceMs, 0) + " ms | intensita "
+                + juce::String(juce::roundToInt(y * 100.0f)) + "%"
+            : "XY pronto — tieni premuto il pad",
+            juce::dontSendNotification);
+    };
     dspLoadLabel.setJustificationType(juce::Justification::centredRight);
     dspLoadLabel.setText("DSP 0% | XRUN 0 | ECO 32G", juce::dontSendNotification);
 
@@ -268,6 +284,7 @@ MainComponent::MainComponent()
     loopPageButton.onClick = [this] { showPage(Page::loop); };
     keysPageButton.onClick = [this] { showPage(Page::keys); };
     effectsPageButton.onClick = [this] { showPage(Page::effects); };
+    performancePageButton.onClick = [this] { showPage(Page::performance); };
     scenesPageButton.onClick = [this] { showPage(Page::scenes); };
     powerButton.setColour(juce::TextButton::buttonColourId,
                           MelaColours::coral.darker(0.18f));
@@ -480,6 +497,7 @@ MainComponent::MainComponent()
     {
         waveform.setHardwareTouchEnabled(isAvailable);
         touchKeyboard.setHardwareTouchEnabled(isAvailable);
+        performancePad.setHardwareTouchEnabled(isAvailable);
         if (! isAvailable)
         {
             hardwareTouchTargets.fill(HardwareTouchTarget::none);
@@ -522,6 +540,7 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
                                    LinuxMultiTouchInput::maximumTouches>;
     TouchPoints waveformPoints;
     TouchPoints keyboardPoints;
+    std::optional<juce::Point<float>> performancePoint;
 
     for (size_t index = 0; index < contacts.size(); ++index)
     {
@@ -539,7 +558,8 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
         const auto mainPositionInt = mainPosition.roundToInt();
 
         if ((target == HardwareTouchTarget::waveform && ! waveform.isVisible())
-            || (target == HardwareTouchTarget::keyboard && ! touchKeyboard.isVisible()))
+            || (target == HardwareTouchTarget::keyboard && ! touchKeyboard.isVisible())
+            || (target == HardwareTouchTarget::performance && ! performancePad.isVisible()))
             target = HardwareTouchTarget::none;
 
         if (target == HardwareTouchTarget::none)
@@ -549,16 +569,26 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
             else if (touchKeyboard.isVisible()
                      && touchKeyboard.getBounds().contains(mainPositionInt))
                 target = HardwareTouchTarget::keyboard;
+            else if (performancePad.isVisible())
+            {
+                const auto localPosition = performancePad.getLocalPoint(
+                    this, mainPositionInt).toFloat();
+                if (performancePad.containsPadPosition(localPosition))
+                    target = HardwareTouchTarget::performance;
+            }
         }
 
         if (target == HardwareTouchTarget::waveform)
             waveformPoints[index] = waveform.getLocalPoint(this, mainPositionInt).toFloat();
         else if (target == HardwareTouchTarget::keyboard)
             keyboardPoints[index] = touchKeyboard.getLocalPoint(this, mainPositionInt).toFloat();
+        else if (target == HardwareTouchTarget::performance && ! performancePoint.has_value())
+            performancePoint = performancePad.getLocalPoint(this, mainPositionInt).toFloat();
     }
 
     waveform.setHardwareTouches(waveformPoints);
     touchKeyboard.setHardwareTouches(keyboardPoints);
+    performancePad.setHardwareTouch(performancePoint);
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
@@ -579,9 +609,10 @@ void MainComponent::paint(juce::Graphics& graphics)
                      : currentPage == Page::loop ? "MELA - 4 LOOP EDITOR"
                      : currentPage == Page::keys ? "MELA - SAMPLE KEYS"
                      : currentPage == Page::effects ? "MELA - EFFETTI"
+                     : currentPage == Page::performance ? "MELA - XY LIVE"
                                                     : "MELA - SCENE";
     graphics.drawText(title,
-                      24, 12, designWidth - 800, 42, juce::Justification::centredLeft);
+                      24, 12, 410, 42, juce::Justification::centredLeft);
     const auto panel = juce::Rectangle<int>(0, 0, designWidth, designHeight)
                            .reduced(24).withTrimmedTop(60)
                            .withTrimmedBottom(82).toFloat();
@@ -604,6 +635,7 @@ void MainComponent::resized()
     wifiPageButton.setBounds(header.removeFromRight(90).reduced(4));
     networkPageButton.setBounds(header.removeFromRight(90).reduced(4));
     scenesPageButton.setBounds(header.removeFromRight(90).reduced(4));
+    performancePageButton.setBounds(header.removeFromRight(80).reduced(4));
     effectsPageButton.setBounds(header.removeFromRight(90).reduced(4));
     keysPageButton.setBounds(header.removeFromRight(90).reduced(4));
     loopPageButton.setBounds(header.removeFromRight(90).reduced(4));
@@ -821,6 +853,10 @@ void MainComponent::resized()
             delayPanel.setBounds(content.removeFromLeft(masterWidth).reduced(8));
             reverbPanel.setBounds(content.reduced(8));
         }
+    }
+    else if (currentPage == Page::performance)
+    {
+        performancePad.setBounds(content);
     }
 
     const auto scaleX = static_cast<float>(getWidth()) / static_cast<float>(designWidth);
@@ -1653,6 +1689,8 @@ void MainComponent::showPage(Page pageToShow)
         stopAndLoadRecording();
     if (currentPage == Page::keys && pageToShow != Page::keys)
         touchKeyboard.releaseAll();
+    if (currentPage == Page::performance && pageToShow != Page::performance)
+        performancePad.releaseGesture();
     currentPage = pageToShow;
     const auto showAudio = currentPage == Page::audio;
     const auto showWifi = currentPage == Page::wifi;
@@ -1660,6 +1698,7 @@ void MainComponent::showPage(Page pageToShow)
     const auto showLoop = currentPage == Page::loop;
     const auto showKeys = currentPage == Page::keys;
     const auto showScenes = currentPage == Page::scenes;
+    const auto showPerformance = currentPage == Page::performance;
     for (auto* component : std::array<juce::Component*, 23> {
              &waveform, &loadButton, &deleteSampleButton, &recordButton,
              &loopButton, &reverseButton, &envelopeCycleButton, &timeStretchButton,
@@ -1711,6 +1750,7 @@ void MainComponent::showPage(Page pageToShow)
              &sceneDeleteButton, &sceneInfoLabel })
         component->setVisible(showScenes);
     updateEffectPageVisibility();
+    performancePad.setVisible(showPerformance);
 
     const auto showTransport = ! showAudio && ! showWifi && ! showNetwork && ! showScenes;
     playButton.setVisible(showTransport);
@@ -1729,6 +1769,8 @@ void MainComponent::showPage(Page pageToShow)
     effectsPageButton.setColour(juce::TextButton::buttonColourId,
         currentPage == Page::effects ? MelaColours::sky
                                      : MelaColours::panelDark);
+    performancePageButton.setColour(juce::TextButton::buttonColourId,
+        showPerformance ? MelaColours::coral : MelaColours::panelDark);
     scenesPageButton.setColour(juce::TextButton::buttonColourId,
         showScenes ? MelaColours::sky : MelaColours::panelDark);
     resized();

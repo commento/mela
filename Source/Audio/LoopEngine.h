@@ -74,6 +74,7 @@ public:
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
     void setReverb(bool enabled, float size, float damping, float mix);
     void setMasterEqualizer(float lowDb, float midDb, float highDb);
+    void setStutter(bool enabled, float lengthMs, float mix, float feedback, int mode);
 
     [[nodiscard]] bool hasClip(int slotIndex) const;
     [[nodiscard]] bool isPlaying(int slotIndex) const;

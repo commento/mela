@@ -47,6 +47,7 @@ target_sources(Mela PRIVATE
     Source/UI/EffectPanel.cpp
     Source/UI/EqualizerPanel.cpp
     Source/UI/TouchKeyboard.cpp
+    Source/UI/PerformancePad.cpp
     Source/UI/TouchSampleBrowser.cpp
     Source/UI/MelaLookAndFeel.cpp
 )

@@ -31,6 +31,11 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
                            static_cast<int>(std::ceil(sampleRate * 4.0)) + 2);
     delayBuffer.setSize(preparedChannels,
                         static_cast<int>(std::ceil(sampleRate * 2.0)) + 2);
+    stutterHistoryBuffer.setSize(preparedChannels,
+                                 static_cast<int>(std::ceil(sampleRate * 2.0)) + 2);
+    stutterSliceBuffer.setSize(preparedChannels,
+                               static_cast<int>(std::ceil(sampleRate * 0.5)) + 2);
+    stutterWetMix.reset(sampleRate, 0.012);
     smoothedDelaySamples.reset(sampleRate, 0.05);
     smoothedDelaySamples.setCurrentAndTargetValue(sampleRate * 0.35);
     reset();
@@ -58,6 +63,15 @@ void EffectsChain::reset()
     delayBuffer.clear();
     flangerWritePosition = 0;
     delayWritePosition = 0;
+    stutterHistoryBuffer.clear();
+    stutterSliceBuffer.clear();
+    stutterHistoryWritePosition = 0;
+    stutterPlaybackPosition = 0;
+    stutterSliceLength = 1;
+    stutterLoopCount = 0;
+    stutterWasEnabled = false;
+    stutterSliceActive = false;
+    stutterWetMix.setCurrentAndTargetValue(0.0f);
     flangerPhase = 0.0;
     chorus.reset();
     reverb.reset();
@@ -239,6 +253,102 @@ void EffectsChain::setReverb(bool enabled, float size, float damping, float mix)
     reverbParameters.size.store(juce::jlimit(0.0f, 1.0f, size));
     reverbParameters.damping.store(juce::jlimit(0.0f, 1.0f, damping));
     reverbParameters.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+}
+
+void EffectsChain::setStutter(bool enabled, float lengthMs, float mix,
+                              float feedback, int mode)
+{
+    stutter.lengthMs.store(juce::jlimit(30.0f, 500.0f, lengthMs));
+    stutter.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+    stutter.feedback.store(juce::jlimit(0.0f, 1.0f, feedback));
+    stutter.mode.store(juce::jlimit(0, 2, mode));
+    stutter.enabled.store(enabled);
+}
+
+void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
+{
+    const auto channels = juce::jmin(buffer.getNumChannels(), preparedChannels);
+    const auto historySize = stutterHistoryBuffer.getNumSamples();
+    const auto sliceCapacity = stutterSliceBuffer.getNumSamples();
+    if (channels <= 0 || historySize <= 1 || sliceCapacity <= 1)
+        return;
+
+    const auto enabled = stutter.enabled.load();
+    const auto requestedLength = juce::jlimit(
+        2, sliceCapacity,
+        static_cast<int>(std::round(sampleRate * stutter.lengthMs.load() * 0.001)));
+    const auto lengthChanged = std::abs(requestedLength - stutterSliceLength)
+                             > juce::jmax(8, stutterSliceLength / 24);
+
+    if (enabled && (! stutterWasEnabled || lengthChanged))
+    {
+        stutterSliceLength = requestedLength;
+        auto sourcePosition = stutterHistoryWritePosition - stutterSliceLength;
+        while (sourcePosition < 0)
+            sourcePosition += historySize;
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            auto* destination = stutterSliceBuffer.getWritePointer(channel);
+            const auto* source = stutterHistoryBuffer.getReadPointer(channel);
+            for (int sample = 0; sample < stutterSliceLength; ++sample)
+                destination[sample] = source[(sourcePosition + sample) % historySize];
+        }
+        stutterPlaybackPosition = 0;
+        stutterLoopCount = 0;
+        stutterSliceActive = true;
+    }
+
+    stutterWetMix.setTargetValue(enabled ? stutter.mix.load() : 0.0f);
+    const auto feedback = stutter.feedback.load();
+    const auto mode = stutter.mode.load();
+    const auto fadeSamples = juce::jlimit(4, 128, stutterSliceLength / 10);
+
+    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    {
+        const auto wetMix = stutterWetMix.getNextValue();
+        const auto edgeDistance = juce::jmin(stutterPlaybackPosition,
+                                             stutterSliceLength - 1 - stutterPlaybackPosition);
+        const auto edgeGain = juce::jlimit(0.0f, 1.0f,
+                                           static_cast<float>(edgeDistance)
+                                               / static_cast<float>(fadeSamples));
+        auto reverse = mode == 1;
+        if (mode == 2)
+            reverse = (stutterLoopCount & 1) != 0;
+        const auto readPosition = reverse
+            ? stutterSliceLength - 1 - stutterPlaybackPosition
+            : stutterPlaybackPosition;
+
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            auto* output = buffer.getWritePointer(channel);
+            const auto dry = output[sample];
+            stutterHistoryBuffer.setSample(channel, stutterHistoryWritePosition, dry);
+            if (stutterSliceActive && wetMix > 0.0001f)
+            {
+                auto wet = stutterSliceBuffer.getSample(channel, readPosition) * edgeGain;
+                if (mode == 2)
+                    wet = std::round(wet * 28.0f) / 28.0f;
+                output[sample] = dry + wetMix * (wet - dry);
+            }
+        }
+
+        stutterHistoryWritePosition = (stutterHistoryWritePosition + 1) % historySize;
+        if (stutterSliceActive)
+        {
+            if (++stutterPlaybackPosition >= stutterSliceLength)
+            {
+                stutterPlaybackPosition = 0;
+                ++stutterLoopCount;
+                for (int channel = 0; channel < channels; ++channel)
+                    juce::FloatVectorOperations::multiply(
+                        stutterSliceBuffer.getWritePointer(channel), feedback,
+                        stutterSliceLength);
+            }
+            if (! enabled && wetMix <= 0.0001f && ! stutterWetMix.isSmoothing())
+                stutterSliceActive = false;
+        }
+    }
+    stutterWasEnabled = enabled;
 }
 
 void EffectsChain::processDistortion(juce::AudioBuffer<float>& buffer)

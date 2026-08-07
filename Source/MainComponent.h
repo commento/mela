@@ -6,6 +6,7 @@
 #include "UI/EffectPanel.h"
 #include "UI/EqualizerPanel.h"
 #include "UI/MelaLookAndFeel.h"
+#include "UI/PerformancePad.h"
 #include "UI/TouchSlider.h"
 #include "UI/TouchKeyboard.h"
 #include "UI/TouchSampleBrowser.h"
@@ -34,6 +35,7 @@ private:
         loop,
         keys,
         effects,
+        performance,
         scenes
     };
 
@@ -145,7 +147,8 @@ private:
     {
         none,
         waveform,
-        keyboard
+        keyboard,
+        performance
     };
     std::array<HardwareTouchTarget, LinuxMultiTouchInput::maximumTouches>
         hardwareTouchTargets {};
@@ -165,6 +168,7 @@ private:
     juce::TextButton loopPageButton { "LOOP" };
     juce::TextButton keysPageButton { "KEYS" };
     juce::TextButton effectsPageButton { "FX" };
+    juce::TextButton performancePageButton { "XY" };
     juce::TextButton scenesPageButton { "SCENE" };
     juce::TextButton powerButton { "POWER" };
     juce::ToggleButton loopButton { "RIPETI" };
@@ -249,6 +253,7 @@ private:
     EffectPanel delayPanel;
     EffectPanel reverbPanel;
     EqualizerPanel equalizerPanel;
+    PerformancePad performancePad;
     std::array<juce::TextButton, LoopEngine::numberOfSlots + 1> effectTargetButtons;
     TouchSlider delaySendSlider;
     TouchSlider reverbSendSlider;

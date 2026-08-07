@@ -14,6 +14,7 @@ public:
     void processInserts(juce::AudioBuffer<float>& buffer);
     void processDelayReturn(juce::AudioBuffer<float>& buffer);
     void processReverbReturn(juce::AudioBuffer<float>& buffer);
+    void processStutter(juce::AudioBuffer<float>& buffer);
     void processLimiter(juce::AudioBuffer<float>& buffer);
 
     void setEqualizer(float lowDb, float midDb, float highDb);
@@ -24,6 +25,7 @@ public:
     void setChorus(bool enabled, float rateHz, float depth, float mix);
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
     void setReverb(bool enabled, float size, float damping, float mix);
+    void setStutter(bool enabled, float lengthMs, float mix, float feedback, int mode);
 
 private:
     struct EqualizerParameters
@@ -84,6 +86,15 @@ private:
         std::atomic<float> mix { 0.25f };
     } reverbParameters;
 
+    struct StutterParameters
+    {
+        std::atomic<bool> enabled { false };
+        std::atomic<float> lengthMs { 140.0f };
+        std::atomic<float> mix { 0.75f };
+        std::atomic<float> feedback { 0.9f };
+        std::atomic<int> mode { 0 };
+    } stutter;
+
     void processDistortion(juce::AudioBuffer<float>& buffer);
     void processGranular(juce::AudioBuffer<float>& buffer);
     void processFlanger(juce::AudioBuffer<float>& buffer);
@@ -118,8 +129,17 @@ private:
     juce::Random granularRandom;
     juce::AudioBuffer<float> flangerBuffer;
     juce::AudioBuffer<float> delayBuffer;
+    juce::AudioBuffer<float> stutterHistoryBuffer;
+    juce::AudioBuffer<float> stutterSliceBuffer;
     int flangerWritePosition = 0;
     int delayWritePosition = 0;
+    int stutterHistoryWritePosition = 0;
+    int stutterPlaybackPosition = 0;
+    int stutterSliceLength = 1;
+    int stutterLoopCount = 0;
+    bool stutterWasEnabled = false;
+    bool stutterSliceActive = false;
+    juce::SmoothedValue<float> stutterWetMix;
     double flangerPhase = 0.0;
     juce::SmoothedValue<double> smoothedDelaySamples;
     juce::dsp::Chorus<float> chorus;

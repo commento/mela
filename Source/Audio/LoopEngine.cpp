@@ -337,6 +337,12 @@ void LoopEngine::setMasterEqualizer(float lowDb, float midDb, float highDb)
     masterEffects.setEqualizer(lowDb, midDb, highDb);
 }
 
+void LoopEngine::setStutter(bool enabled, float lengthMs, float mix,
+                            float feedback, int mode)
+{
+    masterEffects.setStutter(enabled, lengthMs, mix, feedback, mode);
+}
+
 bool LoopEngine::hasClip(int slotIndex) const
 {
     return isValidSlot(slotIndex)
@@ -435,6 +441,7 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         mix.addFrom(channel, 0, delayBus, channel, 0, numSamples);
         mix.addFrom(channel, 0, reverbBus, channel, 0, numSamples);
     }
+    masterEffects.processStutter(mix);
     masterEffects.processLimiter(mix);
 
     for (int channel = 0; channel < channels; ++channel)

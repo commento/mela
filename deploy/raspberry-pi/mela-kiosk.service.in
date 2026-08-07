@@ -14,6 +14,7 @@ WorkingDirectory=@HOME@
 Environment=HOME=@HOME@
 Environment=DISPLAY=:0
 Environment=MELA_DISPLAY_MODE=1920x1200
+Environment="MELA_RECORDINGS_DIRECTORY=@HOME@/Music/Mela Recordings"
 TTYPath=/dev/tty1
 StandardInput=tty
 StandardOutput=journal

@@ -37,6 +37,9 @@ install -m 0755 "${mela_binary}" /opt/mela/bin/Mela
 install -m 0755 "${project_root}/deploy/raspberry-pi/start-mela-kiosk.sh" \
     /opt/mela/bin/start-mela-kiosk
 install -d -m 0700 "${state_directory}"
+install -d -o "${mela_user}" -g "${mela_group}" -m 0755 "${mela_home}/Music"
+install -d -o "${mela_user}" -g "${mela_group}" -m 0755 \
+    "${mela_home}/Music/Mela Recordings"
 
 for hardware_group in audio video input render netdev; do
     if getent group "${hardware_group}" >/dev/null; then

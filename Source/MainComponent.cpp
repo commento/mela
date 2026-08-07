@@ -7,6 +7,17 @@ namespace
 constexpr int designWidth = 1280;
 constexpr int designHeight = 800;
 
+juce::File getRecordingsDirectory()
+{
+    const auto configuredPath = juce::SystemStats::getEnvironmentVariable(
+        "MELA_RECORDINGS_DIRECTORY", {}).trim();
+    if (configuredPath.isNotEmpty())
+        return juce::File(configuredPath);
+
+    return juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+        .getChildFile("Mela Recordings");
+}
+
 #if JUCE_LINUX
 struct CommandResult
 {
@@ -870,9 +881,7 @@ void MainComponent::deleteActiveSample()
 
                 if (isRecording && sourceFile.existsAsFile())
                 {
-                    const auto recordingsDirectory =
-                        juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-                            .getChildFile("Mela Recordings");
+                    const auto recordingsDirectory = getRecordingsDirectory();
                     if (! sourceFile.isAChildOf(recordingsDirectory)
                         || sourceFile.isSymbolicLink() || ! sourceFile.deleteFile())
                     {
@@ -911,13 +920,13 @@ void MainComponent::toggleRecording()
         return;
     }
 
-    const auto recordingsDirectory =
-        juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-            .getChildFile("Mela Recordings");
+    const auto recordingsDirectory = getRecordingsDirectory();
     const auto directoryResult = recordingsDirectory.createDirectory();
     if (directoryResult.failed())
     {
-        statusLabel.setText("Errore: " + directoryResult.getErrorMessage(),
+        statusLabel.setText("Cartella REC non accessibile: "
+                                + recordingsDirectory.getFullPathName() + " - "
+                                + directoryResult.getErrorMessage(),
                             juce::dontSendNotification);
         return;
     }
@@ -1864,8 +1873,7 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
     int missingFiles = 0;
     juce::String loadWarnings;
     const auto recordingsDirectory =
-        juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-            .getChildFile("Mela Recordings");
+        getRecordingsDirectory();
 
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {

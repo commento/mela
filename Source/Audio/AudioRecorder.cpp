@@ -27,7 +27,11 @@ bool AudioRecorder::start(const juce::File& destination, double sampleRate,
     auto fileStream = destination.createOutputStream();
     if (fileStream == nullptr || ! fileStream->openedOk())
     {
-        errorMessage = "Impossibile creare il file di registrazione";
+        const auto detail = fileStream != nullptr
+            ? fileStream->getStatus().getErrorMessage() : juce::String();
+        errorMessage = "File REC non scrivibile: " + destination.getFullPathName();
+        if (detail.isNotEmpty())
+            errorMessage += " - " + detail;
         return false;
     }
     std::unique_ptr<juce::OutputStream> stream = std::move(fileStream);

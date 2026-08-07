@@ -162,7 +162,8 @@ void LinuxMultiTouchInput::run()
                 continue;
             }
 
-            const auto eventCount = static_cast<int>(bytesRead / sizeof(input_event));
+            const auto eventCount = static_cast<int>(
+                static_cast<size_t>(bytesRead) / sizeof(input_event));
             for (int eventIndex = 0; eventIndex < eventCount; ++eventIndex)
             {
                 const auto& event = events[eventIndex];

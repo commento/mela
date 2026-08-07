@@ -32,6 +32,7 @@ public:
     };
 
     LoopEngine();
+    ~LoopEngine() override;
 
     bool loadFile(int slotIndex, const juce::File& file, juce::String& errorMessage);
     void clearSlot(int slotIndex);
@@ -42,6 +43,7 @@ public:
     void setReverse(int slotIndex, bool shouldReverse);
     void setGain(int slotIndex, float newGain);
     void setPlaybackRate(int slotIndex, double newRate);
+    void setTimeStretch(int slotIndex, bool enabled, float pitchSemitones);
     void setTrimRange(int slotIndex, double newStart, double newEnd);
     void setEnvelope(int slotIndex, double attackSeconds, double decaySeconds,
                      float sustainLevel, double releaseSeconds);
@@ -114,6 +116,9 @@ private:
         std::atomic<bool> reverse { false };
         std::atomic<float> gain { 0.8f };
         std::atomic<double> playbackRate { 1.0 };
+        std::atomic<bool> timeStretchEnabled { false };
+        std::atomic<float> pitchSemitones { 0.0f };
+        std::atomic<bool> stretchResetRequested { true };
         std::atomic<double> trimStart { 0.0 };
         std::atomic<double> trimEnd { 1.0 };
         std::atomic<double> attackSeconds { 0.02 };
@@ -176,6 +181,8 @@ private:
     static bool isValidSlot(int slotIndex);
     static void createWaveformOverview(Clip& clip);
     void renderVoice(Voice& voice, float* const* outputs, int outputChannels, int numSamples);
+    void processTimeStretch(Voice& voice, juce::AudioBuffer<float>& buffer,
+                            int slotIndex, int numSamples);
     float advanceEnvelope(Voice& voice);
     void beginRelease(Voice& voice);
     float cycleEnvelopeLevel(const Voice& voice, double position, double startSample,
@@ -208,6 +215,9 @@ private:
     std::array<SlotEffects, numberOfSlots> slotEffects;
     EffectsChain masterEffects;
     std::array<juce::AudioBuffer<float>, numberOfSlots> slotEffectBuffers;
+    std::array<juce::AudioBuffer<float>, numberOfSlots> stretchOutputBuffers;
+    struct StretchState;
+    std::array<std::unique_ptr<StretchState>, numberOfSlots> stretchStates;
     juce::AudioBuffer<float> masterMixBuffer;
     juce::AudioBuffer<float> delaySendBuffer;
     juce::AudioBuffer<float> reverbSendBuffer;

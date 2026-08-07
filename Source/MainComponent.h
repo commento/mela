@@ -43,6 +43,8 @@ private:
         bool reverse = false;
         bool envelopeCycle = true;
         double speed = 1.0;
+        bool timeStretch = false;
+        double pitch = 0.0;
         double gain = 0.8;
         double attack = 0.02;
         double decay = 0.1;
@@ -168,6 +170,7 @@ private:
     juce::ToggleButton loopButton { "RIPETI" };
     juce::ToggleButton reverseButton { "REVERSE" };
     juce::ToggleButton envelopeCycleButton { "ADSR CICLICO" };
+    juce::ToggleButton timeStretchButton { "STRETCH" };
     juce::TextButton octaveDownButton { "OCT -" };
     juce::TextButton octaveUpButton { "OCT +" };
     juce::Label rootNoteLabel;
@@ -183,12 +186,14 @@ private:
     juce::Label keyReleaseLabel;
 
     TouchSlider speedSlider;
+    TouchSlider pitchSlider;
     TouchSlider gainSlider;
     TouchSlider attackSlider;
     TouchSlider decaySlider;
     TouchSlider sustainSlider;
     TouchSlider releaseSlider;
     juce::Label speedLabel;
+    juce::Label pitchLabel;
     juce::Label gainLabel;
     juce::Label attackLabel;
     juce::Label decayLabel;

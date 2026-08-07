@@ -64,11 +64,11 @@ MainComponent::MainComponent()
              &statusLabel })
         addAndMakeVisible(component);
 
-    for (auto* component : std::array<juce::Component*, 20> {
+    for (auto* component : std::array<juce::Component*, 23> {
              &waveform, &loadButton, &deleteSampleButton, &recordButton,
-             &loopButton, &reverseButton, &envelopeCycleButton,
-             &speedSlider, &gainSlider, &attackSlider, &decaySlider,
-             &sustainSlider, &releaseSlider, &speedLabel, &gainLabel,
+             &loopButton, &reverseButton, &envelopeCycleButton, &timeStretchButton,
+             &speedSlider, &pitchSlider, &gainSlider, &attackSlider, &decaySlider,
+             &sustainSlider, &releaseSlider, &speedLabel, &pitchLabel, &gainLabel,
              &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &clipName })
         addAndMakeVisible(component);
 
@@ -294,6 +294,14 @@ MainComponent::MainComponent()
         engine.setEnvelopeCycle(activeSlot, settings.envelopeCycle);
         updateEnvelope();
     };
+    timeStretchButton.onClick = [this]
+    {
+        auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
+        settings.timeStretch = timeStretchButton.getToggleState();
+        pitchSlider.setEnabled(settings.timeStretch);
+        engine.setTimeStretch(activeSlot, settings.timeStretch,
+                              static_cast<float>(settings.pitch));
+    };
 
     const auto configureKnob = [](TouchSlider& slider, juce::Label& label,
                                   const juce::String& name, double minimum,
@@ -312,6 +320,8 @@ MainComponent::MainComponent()
     };
 
     configureKnob(speedSlider, speedLabel, "VELOCITA", 0.25, 1.5, 0.01, 1.0, " x");
+    configureKnob(pitchSlider, pitchLabel, "PITCH", -12.0, 12.0, 1.0, 0.0, " st");
+    pitchSlider.setEnabled(false);
     configureKnob(gainSlider, gainLabel, "VOLUME", 0.0, 1.0, 0.01, 0.8, "");
     configureKnob(attackSlider, attackLabel, "ATTACK", 0.0, 5.0, 0.01, 0.02, " s");
     configureKnob(decaySlider, decayLabel, "DECAY", 0.0, 5.0, 0.01, 0.1, " s");
@@ -332,6 +342,13 @@ MainComponent::MainComponent()
         settings.speed = speedSlider.getValue();
         engine.setPlaybackRate(activeSlot, settings.speed);
         updateEnvelope();
+    };
+    pitchSlider.onValueChange = [this]
+    {
+        auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
+        settings.pitch = pitchSlider.getValue();
+        engine.setTimeStretch(activeSlot, settings.timeStretch,
+                              static_cast<float>(settings.pitch));
     };
     gainSlider.onValueChange = [this]
     {
@@ -703,6 +720,7 @@ void MainComponent::resized()
         deleteSampleButton.setBounds(heading.removeFromRight(185).reduced(4));
         recordButton.setBounds(heading.removeFromRight(145).reduced(4));
         envelopeCycleButton.setBounds(heading.removeFromRight(170).reduced(5, 3));
+        timeStretchButton.setBounds(heading.removeFromRight(135).reduced(5, 3));
         reverseButton.setBounds(heading.removeFromRight(130).reduced(5, 3));
         loopButton.setBounds(heading.removeFromRight(120).reduced(5, 3));
         clipName.setBounds(heading.reduced(4));
@@ -710,14 +728,16 @@ void MainComponent::resized()
         waveform.setBounds(content.removeFromTop(255));
         content.removeFromTop(7);
 
-        std::array<juce::Slider*, 6> sliders {
-            &speedSlider, &gainSlider, &attackSlider, &decaySlider, &sustainSlider, &releaseSlider
+        std::array<juce::Slider*, 7> sliders {
+            &speedSlider, &pitchSlider, &gainSlider, &attackSlider, &decaySlider,
+            &sustainSlider, &releaseSlider
         };
-        std::array<juce::Label*, 6> labels {
-            &speedLabel, &gainLabel, &attackLabel, &decayLabel, &sustainLabel, &releaseLabel
+        std::array<juce::Label*, 7> labels {
+            &speedLabel, &pitchLabel, &gainLabel, &attackLabel, &decayLabel,
+            &sustainLabel, &releaseLabel
         };
-        const auto controlWidth = content.getWidth() / 6;
-        for (int index = 0; index < 6; ++index)
+        const auto controlWidth = content.getWidth() / 7;
+        for (int index = 0; index < 7; ++index)
         {
             auto control = content.withTrimmedLeft(index * controlWidth)
                                   .withWidth(controlWidth).reduced(6, 0);
@@ -1603,7 +1623,10 @@ void MainComponent::selectSlot(int slotIndex)
     loopButton.setToggleState(settings.looping, juce::dontSendNotification);
     reverseButton.setToggleState(settings.reverse, juce::dontSendNotification);
     envelopeCycleButton.setToggleState(settings.envelopeCycle, juce::dontSendNotification);
+    timeStretchButton.setToggleState(settings.timeStretch, juce::dontSendNotification);
     speedSlider.setValue(settings.speed, juce::dontSendNotification);
+    pitchSlider.setValue(settings.pitch, juce::dontSendNotification);
+    pitchSlider.setEnabled(settings.timeStretch);
     gainSlider.setValue(settings.gain, juce::dontSendNotification);
     attackSlider.setValue(settings.attack, juce::dontSendNotification);
     decaySlider.setValue(settings.decay, juce::dontSendNotification);
@@ -1637,11 +1660,11 @@ void MainComponent::showPage(Page pageToShow)
     const auto showLoop = currentPage == Page::loop;
     const auto showKeys = currentPage == Page::keys;
     const auto showScenes = currentPage == Page::scenes;
-    for (auto* component : std::array<juce::Component*, 20> {
+    for (auto* component : std::array<juce::Component*, 23> {
              &waveform, &loadButton, &deleteSampleButton, &recordButton,
-             &loopButton, &reverseButton, &envelopeCycleButton,
-             &speedSlider, &gainSlider, &attackSlider, &decaySlider,
-             &sustainSlider, &releaseSlider, &speedLabel, &gainLabel,
+             &loopButton, &reverseButton, &envelopeCycleButton, &timeStretchButton,
+             &speedSlider, &pitchSlider, &gainSlider, &attackSlider, &decaySlider,
+             &sustainSlider, &releaseSlider, &speedLabel, &pitchLabel, &gainLabel,
              &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &clipName })
         component->setVisible(showLoop);
     audioInfoLabel.setVisible(showAudio);
@@ -1768,7 +1791,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     };
 
     auto root = new juce::DynamicObject();
-    root->setProperty("version", 2);
+    root->setProperty("version", 3);
     root->setProperty("name", sceneName);
     root->setProperty("activeSlot", activeSlot);
 
@@ -1785,6 +1808,8 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
         item->setProperty("reverse", settings.reverse);
         item->setProperty("envelopeCycle", settings.envelopeCycle);
         item->setProperty("speed", settings.speed);
+        item->setProperty("timeStretch", settings.timeStretch);
+        item->setProperty("pitch", settings.pitch);
         item->setProperty("gain", settings.gain);
         item->setProperty("attack", settings.attack);
         item->setProperty("decay", settings.decay);
@@ -1890,6 +1915,8 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         settings.reverse = boolean(item, "reverse", settings.reverse);
         settings.envelopeCycle = boolean(item, "envelopeCycle", settings.envelopeCycle);
         settings.speed = number(item, "speed", settings.speed);
+        settings.timeStretch = boolean(item, "timeStretch", false);
+        settings.pitch = number(item, "pitch", 0.0);
         settings.gain = number(item, "gain", settings.gain);
         settings.attack = number(item, "attack", settings.attack);
         settings.decay = number(item, "decay", settings.decay);
@@ -1977,6 +2004,8 @@ void MainComponent::applyAllSettingsToEngine()
         engine.setReverse(slot, settings.reverse);
         engine.setGain(slot, static_cast<float>(settings.gain));
         engine.setPlaybackRate(slot, settings.speed);
+        engine.setTimeStretch(slot, settings.timeStretch,
+                              static_cast<float>(settings.pitch));
         engine.setTrimRange(slot, settings.trimStart, settings.trimEnd);
         engine.setEnvelope(slot, settings.attack, settings.decay,
                            static_cast<float>(settings.sustain), settings.release);

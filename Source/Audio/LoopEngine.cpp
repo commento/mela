@@ -1,13 +1,42 @@
+#if defined(__clang__)
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wconversion"
+ #pragma clang diagnostic ignored "-Wextra-semi"
+ #pragma clang diagnostic ignored "-Wfloat-equal"
+ #pragma clang diagnostic ignored "-Wshadow"
+#elif defined(__GNUC__)
+ #pragma GCC diagnostic push
+ #pragma GCC diagnostic ignored "-Wconversion"
+ #pragma GCC diagnostic ignored "-Wextra-semi"
+ #pragma GCC diagnostic ignored "-Wfloat-equal"
+ #pragma GCC diagnostic ignored "-Wshadow"
+#endif
+#include <signalsmith-stretch/signalsmith-stretch.h>
+#if defined(__clang__)
+ #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+ #pragma GCC diagnostic pop
+#endif
+
 #include "LoopEngine.h"
 
 #include <cmath>
 #include <cstdint>
 #include <limits>
 
+struct LoopEngine::StretchState
+{
+    signalsmith::stretch::SignalsmithStretch<float> processor;
+};
+
 LoopEngine::LoopEngine()
 {
     formatManager.registerBasicFormats();
+    for (auto& state : stretchStates)
+        state = std::make_unique<StretchState>();
 }
+
+LoopEngine::~LoopEngine() = default;
 
 bool LoopEngine::loadFile(int slotIndex, const juce::File& file, juce::String& errorMessage)
 {
@@ -45,6 +74,7 @@ bool LoopEngine::loadFile(int slotIndex, const juce::File& file, juce::String& e
     createWaveformOverview(*newClip);
     auto& voice = voices[static_cast<size_t>(slotIndex)];
     voice.command.store(Command::stopImmediate);
+    voice.stretchResetRequested.store(true);
     voice.trimStart.store(0.0);
     voice.trimEnd.store(1.0);
     std::atomic_store(&voice.clip, std::shared_ptr<const Clip>(std::move(newClip)));
@@ -58,6 +88,7 @@ void LoopEngine::clearSlot(int slotIndex)
 
     auto& voice = voices[static_cast<size_t>(slotIndex)];
     voice.command.store(Command::stopImmediate);
+    voice.stretchResetRequested.store(true);
     voice.playing.store(false);
     voice.playheadNormalised.store(0.0);
     std::atomic_store(&voice.clip, std::shared_ptr<const Clip> {});
@@ -67,7 +98,10 @@ void LoopEngine::clearSlot(int slotIndex)
 void LoopEngine::play(int slotIndex)
 {
     if (isValidSlot(slotIndex))
+    {
+        voices[static_cast<size_t>(slotIndex)].stretchResetRequested.store(true);
         voices[static_cast<size_t>(slotIndex)].command.store(Command::play);
+    }
 }
 
 void LoopEngine::stop(int slotIndex)
@@ -92,7 +126,10 @@ void LoopEngine::setLooping(int slotIndex, bool shouldLoop)
 void LoopEngine::setReverse(int slotIndex, bool shouldReverse)
 {
     if (isValidSlot(slotIndex))
+    {
         voices[static_cast<size_t>(slotIndex)].reverse.store(shouldReverse);
+        voices[static_cast<size_t>(slotIndex)].stretchResetRequested.store(true);
+    }
 }
 
 void LoopEngine::setGain(int slotIndex, float newGain)
@@ -105,6 +142,18 @@ void LoopEngine::setPlaybackRate(int slotIndex, double newRate)
 {
     if (isValidSlot(slotIndex))
         voices[static_cast<size_t>(slotIndex)].playbackRate.store(juce::jlimit(0.25, 1.5, newRate));
+}
+
+void LoopEngine::setTimeStretch(int slotIndex, bool enabled, float pitchSemitones)
+{
+    if (! isValidSlot(slotIndex))
+        return;
+
+    auto& voice = voices[static_cast<size_t>(slotIndex)];
+    const auto wasEnabled = voice.timeStretchEnabled.exchange(enabled);
+    voice.pitchSemitones.store(juce::jlimit(-12.0f, 12.0f, pitchSemitones));
+    if (wasEnabled != enabled)
+        voice.stretchResetRequested.store(true);
 }
 
 void LoopEngine::setTrimRange(int slotIndex, double newStart, double newEnd)
@@ -122,6 +171,8 @@ void LoopEngine::setTrimRange(int slotIndex, double newStart, double newEnd)
     auto& voice = voices[static_cast<size_t>(slotIndex)];
     voice.trimStart.store(start);
     voice.trimEnd.store(end);
+    if (! voice.playing.load())
+        voice.stretchResetRequested.store(true);
 }
 
 void LoopEngine::setEnvelope(int slotIndex, double attack, double decay,
@@ -349,6 +400,8 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         slotBuffer.clear();
         renderVoice(voices[static_cast<size_t>(slot)],
                     slotBuffer.getArrayOfWritePointers(), channels, numSamples);
+        processTimeStretch(voices[static_cast<size_t>(slot)], slotBuffer,
+                           slot, numSamples);
         for (auto& instrumentVoice : instrumentVoices)
             if (instrumentVoice.slotIndex == slot)
                 renderInstrumentVoice(instrumentVoice,
@@ -423,6 +476,13 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
         masterEffects.prepare(deviceSampleRate, maximumBlockSize, channels);
         for (auto& buffer : slotEffectBuffers)
             buffer.setSize(channels, maximumBlockSize, false, true, false);
+        for (auto& buffer : stretchOutputBuffers)
+            buffer.setSize(channels, maximumBlockSize, false, true, false);
+        for (auto& state : stretchStates)
+            state->processor.presetCheaper(channels,
+                                           static_cast<float>(deviceSampleRate), true);
+        for (auto& voice : voices)
+            voice.stretchResetRequested.store(true);
         masterMixBuffer.setSize(channels, maximumBlockSize, false, true, false);
         delaySendBuffer.setSize(channels, maximumBlockSize, false, true, false);
         reverbSendBuffer.setSize(channels, maximumBlockSize, false, true, false);
@@ -434,6 +494,8 @@ void LoopEngine::audioDeviceStopped()
     activeInputChannels.store(0);
     for (auto& effects : slotEffects)
         effects.chain.reset();
+    for (auto& voice : voices)
+        voice.stretchResetRequested.store(true);
     masterEffects.reset();
 }
 
@@ -634,6 +696,36 @@ void LoopEngine::renderVoice(Voice& voice, float* const* outputs,
     }
 
     voice.playheadNormalised.store(voice.playhead / static_cast<double>(sourceLength));
+}
+
+void LoopEngine::processTimeStretch(Voice& voice, juce::AudioBuffer<float>& buffer,
+                                    int slotIndex, int numSamples)
+{
+    if (! voice.timeStretchEnabled.load() || numSamples <= 0)
+        return;
+
+    if (voice.stretchResetRequested.exchange(false))
+        stretchStates[static_cast<size_t>(slotIndex)]->processor.reset();
+
+    // renderVoice() already applies varispeed. Counter-shift its pitch, then
+    // add the user's musical transposition, leaving the duration untouched.
+    const auto rate = juce::jmax(0.000001, voice.playbackRate.load());
+    const auto varispeedSemitones = static_cast<float>(12.0 * std::log2(rate));
+    auto& processor = stretchStates[static_cast<size_t>(slotIndex)]->processor;
+    processor.setTransposeSemitones(
+        voice.pitchSemitones.load() - varispeedSemitones);
+
+    auto& output = stretchOutputBuffers[static_cast<size_t>(slotIndex)];
+    const auto channels = juce::jmin(buffer.getNumChannels(), output.getNumChannels());
+    if (channels <= 0 || output.getNumSamples() < numSamples)
+        return;
+
+    output.clear(0, numSamples);
+    processor.process(buffer.getArrayOfReadPointers(), numSamples,
+                      output.getArrayOfWritePointers(), numSamples);
+    for (int channel = 0; channel < channels; ++channel)
+        juce::FloatVectorOperations::copy(buffer.getWritePointer(channel),
+                                          output.getReadPointer(channel), numSamples);
 }
 
 float LoopEngine::advanceEnvelope(Voice& voice)

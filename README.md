@@ -22,6 +22,8 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - riproduzione continua oppure singola;
 - reverse indipendente per ogni loop;
 - velocità regolabile da 0,25× a 1,5× (con variazione dell'intonazione);
+- modalità `STRETCH` per cambiare velocità senza cambiare intonazione;
+- pitch shifting indipendente da -12 a +12 semitoni quando `STRETCH` è attivo;
 - inviluppo ADSR: fade-in con Attack e fade-out allo Stop con Release;
 - modalita `ADSR CICLICO`, visualizzata sopra la forma d'onda e ripetuta a ogni giro;
 - manopole touch: trascinamento verso l'alto per aumentare e verso il basso per diminuire;
@@ -58,7 +60,7 @@ lunghe o per librerie con molti loop.
 
 ## Build macOS
 
-Servono Xcode Command Line Tools, Git e CMake 3.22 o successivo.
+Servono Xcode Command Line Tools, Git e CMake 3.24 o successivo.
 
 ```sh
 cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Debug
@@ -163,5 +165,4 @@ Durante lo sviluppo Linux si puo' evitare il fullscreen avviando `Mela --windowe
 1. indicatore del livello di ingresso e regolazione del gain di registrazione;
 2. caricamento dei file su thread dedicato;
 3. griglia temporale e aggancio opzionale degli estremi;
-4. time-stretch opzionale per cambiare velocità senza cambiare intonazione;
-5. salvataggio e ripristino delle sessioni.
+4. salvataggio e ripristino delle sessioni.

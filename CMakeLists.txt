@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 
 project(Mela VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -12,6 +12,16 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(JUCE)
+
+# Header-only pitch/time processor. Pin the revision so macOS and Raspberry Pi
+# produce the same result and a future upstream change cannot alter the sound.
+FetchContent_Declare(
+    signalsmith_stretch
+    GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+    GIT_TAG 57b93f4e9206a089a45387eaa39bdc9f310d3308
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(signalsmith_stretch)
 
 juce_add_gui_app(Mela
     PRODUCT_NAME "Mela"
@@ -41,7 +51,9 @@ target_sources(Mela PRIVATE
     Source/UI/MelaLookAndFeel.cpp
 )
 
-target_include_directories(Mela PRIVATE Source)
+target_include_directories(Mela PRIVATE
+    Source
+)
 target_compile_features(Mela PRIVATE cxx_std_17)
 
 target_compile_definitions(Mela PRIVATE
@@ -52,6 +64,7 @@ target_compile_definitions(Mela PRIVATE
 
 target_link_libraries(Mela PRIVATE
     MelaAssets
+    signalsmith-stretch
     juce::juce_audio_devices
     juce::juce_audio_formats
     juce::juce_audio_utils

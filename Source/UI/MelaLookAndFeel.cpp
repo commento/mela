@@ -47,6 +47,20 @@ juce::Font MelaLookAndFeel::getComboBoxFont(juce::ComboBox& box)
     return cartoonFont(juce::jmin(28.5f, static_cast<float>(box.getHeight()) * 0.42f));
 }
 
+juce::PopupMenu::Options MelaLookAndFeel::getOptionsForComboBoxPopupMenu(
+    juce::ComboBox& box, juce::Label& label)
+{
+    auto options = juce::LookAndFeel_V4::getOptionsForComboBoxPopupMenu(box, label);
+   #if JUCE_LINUX
+    // On Raspberry Pi/X11 a temporary popup window can leave stale pixels after
+    // it closes. Keeping the popup inside Mela's main window makes JUCE repaint
+    // the uncovered area as part of the normal component hierarchy.
+    if (auto* topLevel = box.getTopLevelComponent())
+        options = options.withParentComponent(topLevel);
+   #endif
+    return options;
+}
+
 void MelaLookAndFeel::drawButtonBackground(juce::Graphics& graphics,
                                            juce::Button& button,
                                            const juce::Colour& background,

@@ -5,7 +5,9 @@
 
 namespace
 {
-constexpr std::array<const char*, 3> modeNames { "REPEAT", "REVERSE", "GLITCH" };
+constexpr std::array<const char*, 5> modeNames {
+    "REPEAT", "REVERSE", "GLITCH", "FILTRO", "FLANGER"
+};
 constexpr std::array<const char*, 4> sliceNames { "400 ms", "200 ms", "100 ms", "50 ms" };
 constexpr std::array<float, 4> sliceValues { 400.0f, 200.0f, 100.0f, 50.0f };
 
@@ -85,13 +87,18 @@ void PerformancePad::paint(juce::Graphics& graphics)
 
     graphics.setColour(MelaColours::cream.withAlpha(0.8f));
     graphics.setFont(juce::FontOptions(14.0f, juce::Font::bold));
-    graphics.drawText("SLICE  LUNGA  →  MICRO", pad.toNearestInt().removeFromBottom(30),
+    const auto xAxis = mode == Mode::filter ? "CUTOFF  BASSO  →  ALTO"
+                     : mode == Mode::flanger ? "RATE  LENTO  →  VELOCE"
+                                             : "SLICE  LUNGA  →  MICRO";
+    graphics.drawText(xAxis, pad.toNearestInt().removeFromBottom(30),
                       juce::Justification::centred);
     graphics.saveState();
     graphics.addTransform(juce::AffineTransform::rotation(-juce::MathConstants<float>::halfPi,
                                                            pad.getX() + 18.0f,
                                                            pad.getCentreY()));
-    graphics.drawText("INTENSITA  →", juce::roundToInt(pad.getX() - pad.getHeight() * 0.5f + 18.0f),
+    const auto yAxis = mode == Mode::filter ? "RISONANZA  →"
+                     : mode == Mode::flanger ? "DEPTH  →" : "INTENSITA  →";
+    graphics.drawText(yAxis, juce::roundToInt(pad.getX() - pad.getHeight() * 0.5f + 18.0f),
                       juce::roundToInt(pad.getCentreY() - 14.0f),
                       juce::roundToInt(pad.getHeight()), 28, juce::Justification::centred);
     graphics.restoreState();
@@ -102,14 +109,32 @@ void PerformancePad::paint(juce::Graphics& graphics)
     graphics.setColour(MelaColours::custard);
     graphics.setFont(juce::FontOptions(17.0f, juce::Font::bold));
     graphics.drawText("CARATTERE", side.removeFromTop(28), juce::Justification::centredLeft);
-    side.removeFromTop(176);
+    side.removeFromTop(274);
     graphics.drawText("TAGLI RAPIDI", side.removeFromTop(32), juce::Justification::centredLeft);
     side.removeFromTop(154);
     graphics.setColour(MelaColours::cream);
     graphics.setFont(juce::FontOptions(16.0f));
-    graphics.drawFittedText("SLICE  " + juce::String(sliceMsFromX(x), 0) + " ms\n"
-                                + "INTENSITA  " + juce::String(juce::roundToInt(y * 100.0f)) + "%",
-                            side, juce::Justification::centredLeft, 2);
+    juce::String readout;
+    if (mode == Mode::filter)
+    {
+        const auto cutoff = 80.0f * std::pow(20000.0f / 80.0f, x);
+        readout = "CUTOFF  " + juce::String(cutoff >= 1000.0f ? cutoff / 1000.0f : cutoff,
+                                             cutoff >= 1000.0f ? 1 : 0)
+                + (cutoff >= 1000.0f ? " kHz" : " Hz")
+                + "\nRISONANZA  " + juce::String(juce::roundToInt(y * 100.0f)) + "%";
+    }
+    else if (mode == Mode::flanger)
+    {
+        const auto rate = 0.05f * std::pow(120.0f, x);
+        readout = "RATE  " + juce::String(rate, 2) + " Hz\nDEPTH  "
+                + juce::String(juce::roundToInt(y * 100.0f)) + "%";
+    }
+    else
+    {
+        readout = "SLICE  " + juce::String(sliceMsFromX(x), 0) + " ms\nINTENSITA  "
+                + juce::String(juce::roundToInt(y * 100.0f)) + "%";
+    }
+    graphics.drawFittedText(readout, side, juce::Justification::centredLeft, 2);
 }
 
 void PerformancePad::resized()
@@ -119,7 +144,7 @@ void PerformancePad::resized()
     side = side.removeFromRight(245);
     for (auto& button : modeButtons)
         button.setBounds(side.removeFromTop(54).reduced(2, 4));
-    side.removeFromTop(44);
+    side.removeFromTop(50);
     for (auto& button : sliceButtons)
         button.setBounds(side.removeFromTop(42).reduced(2, 3));
 }

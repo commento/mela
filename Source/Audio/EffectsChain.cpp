@@ -36,6 +36,11 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
     stutterSliceBuffer.setSize(preparedChannels,
                                static_cast<int>(std::ceil(sampleRate * 0.5)) + 2);
     stutterWetMix.reset(sampleRate, 0.012);
+    performanceFilterG.reset(sampleRate, 0.025);
+    performanceFilterK.reset(sampleRate, 0.025);
+    performanceFlangerRate.reset(sampleRate, 0.025);
+    performanceFlangerDepth.reset(sampleRate, 0.025);
+    performanceFlangerFeedback.reset(sampleRate, 0.025);
     smoothedDelaySamples.reset(sampleRate, 0.05);
     smoothedDelaySamples.setCurrentAndTargetValue(sampleRate * 0.35);
     reset();
@@ -68,10 +73,20 @@ void EffectsChain::reset()
     stutterHistoryWritePosition = 0;
     stutterPlaybackPosition = 0;
     stutterSliceLength = 1;
+    stutterRequestedLength = 1;
+    stutterCurrentMode = 0;
     stutterLoopCount = 0;
     stutterWasEnabled = false;
     stutterSliceActive = false;
+    stutterLoopGain = 1.0f;
     stutterWetMix.setCurrentAndTargetValue(0.0f);
+    performanceFilterG.setCurrentAndTargetValue(0.1f);
+    performanceFilterK.setCurrentAndTargetValue(1.0f);
+    performanceFlangerRate.setCurrentAndTargetValue(0.25f);
+    performanceFlangerDepth.setCurrentAndTargetValue(0.5f);
+    performanceFlangerFeedback.setCurrentAndTargetValue(0.2f);
+    performanceFilterState1.fill(0.0f);
+    performanceFilterState2.fill(0.0f);
     flangerPhase = 0.0;
     chorus.reset();
     reverb.reset();
@@ -261,7 +276,7 @@ void EffectsChain::setStutter(bool enabled, float lengthMs, float mix,
     stutter.lengthMs.store(juce::jlimit(30.0f, 500.0f, lengthMs));
     stutter.mix.store(juce::jlimit(0.0f, 1.0f, mix));
     stutter.feedback.store(juce::jlimit(0.0f, 1.0f, feedback));
-    stutter.mode.store(juce::jlimit(0, 2, mode));
+    stutter.mode.store(juce::jlimit(0, 4, mode));
     stutter.enabled.store(enabled);
 }
 
@@ -274,79 +289,186 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
         return;
 
     const auto enabled = stutter.enabled.load();
-    const auto requestedLength = juce::jlimit(
+    const auto requestedMode = stutter.mode.load();
+    stutterRequestedLength = juce::jlimit(
         2, sliceCapacity,
         static_cast<int>(std::round(sampleRate * stutter.lengthMs.load() * 0.001)));
-    const auto lengthChanged = std::abs(requestedLength - stutterSliceLength)
-                             > juce::jmax(8, stutterSliceLength / 24);
+    const auto normalisedX = juce::jlimit(0.0f, 1.0f,
+        1.0f - std::log(stutter.lengthMs.load() / 30.0f) / std::log(500.0f / 30.0f));
+    const auto normalisedY = juce::jlimit(0.0f, 1.0f,
+        (stutter.mix.load() - 0.25f) / 0.75f);
 
-    if (enabled && (! stutterWasEnabled || lengthChanged))
+    const auto cutoff = juce::jmin(static_cast<float>(sampleRate * 0.42),
+        80.0f * std::pow(20000.0f / 80.0f, normalisedX));
+    performanceFilterG.setTargetValue(std::tan(
+        juce::MathConstants<float>::pi * cutoff / static_cast<float>(sampleRate)));
+    performanceFilterK.setTargetValue(2.0f - 1.85f * normalisedY);
+    performanceFlangerRate.setTargetValue(0.05f * std::pow(120.0f, normalisedX));
+    performanceFlangerDepth.setTargetValue(0.15f + 0.85f * normalisedY);
+    performanceFlangerFeedback.setTargetValue(0.1f + 0.7f * normalisedY);
+
+    const auto stutterModeRequested = requestedMode <= 2;
+    if (enabled && stutterModeRequested
+        && (! stutterWasEnabled || stutterCurrentMode > 2))
     {
-        stutterSliceLength = requestedLength;
-        auto sourcePosition = stutterHistoryWritePosition - stutterSliceLength;
+        // Capture one 500 ms window only on touch-down. Finger movement merely
+        // changes the loop boundary, avoiding repeated copies and discontinuities.
+        auto sourcePosition = stutterHistoryWritePosition - sliceCapacity;
         while (sourcePosition < 0)
             sourcePosition += historySize;
         for (int channel = 0; channel < channels; ++channel)
         {
             auto* destination = stutterSliceBuffer.getWritePointer(channel);
             const auto* source = stutterHistoryBuffer.getReadPointer(channel);
-            for (int sample = 0; sample < stutterSliceLength; ++sample)
+            for (int sample = 0; sample < sliceCapacity; ++sample)
                 destination[sample] = source[(sourcePosition + sample) % historySize];
         }
+        stutterSliceLength = stutterRequestedLength;
+        stutterCurrentMode = requestedMode;
         stutterPlaybackPosition = 0;
         stutterLoopCount = 0;
+        stutterLoopGain = 1.0f;
         stutterSliceActive = true;
     }
+    else if (enabled && ! stutterModeRequested)
+    {
+        stutterCurrentMode = requestedMode;
+        stutterSliceActive = false;
+    }
 
-    stutterWetMix.setTargetValue(enabled ? stutter.mix.load() : 0.0f);
+    const auto requestedWet = requestedMode == 4
+        ? 0.15f + normalisedY * 0.6f : stutter.mix.load();
+    stutterWetMix.setTargetValue(enabled ? requestedWet : 0.0f);
     const auto feedback = stutter.feedback.load();
-    const auto mode = stutter.mode.load();
-    const auto fadeSamples = juce::jlimit(4, 128, stutterSliceLength / 10);
+    const auto flangerBufferLength = flangerBuffer.getNumSamples();
+
+    if (! enabled && ! stutterWetMix.isSmoothing()
+        && stutterWetMix.getCurrentValue() <= 0.0001f)
+    {
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            for (int channel = 0; channel < channels; ++channel)
+                stutterHistoryBuffer.setSample(channel, stutterHistoryWritePosition,
+                                               buffer.getSample(channel, sample));
+            stutterHistoryWritePosition = (stutterHistoryWritePosition + 1) % historySize;
+        }
+        stutterSliceActive = false;
+        stutterWasEnabled = false;
+        return;
+    }
 
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
         const auto wetMix = stutterWetMix.getNextValue();
-        const auto edgeDistance = juce::jmin(stutterPlaybackPosition,
-                                             stutterSliceLength - 1 - stutterPlaybackPosition);
-        const auto edgeGain = juce::jlimit(0.0f, 1.0f,
-                                           static_cast<float>(edgeDistance)
-                                               / static_cast<float>(fadeSamples));
-        auto reverse = mode == 1;
-        if (mode == 2)
+        const auto filterG = performanceFilterG.getNextValue();
+        const auto filterK = performanceFilterK.getNextValue();
+        const auto flangerRate = performanceFlangerRate.getNextValue();
+        const auto flangerDepth = performanceFlangerDepth.getNextValue();
+        const auto flangerFeedback = performanceFlangerFeedback.getNextValue();
+        auto flangerFirst = 0;
+        auto flangerSecond = 0;
+        auto flangerAlpha = 0.0f;
+        if (stutterCurrentMode == 4 && flangerBufferLength > 1)
+        {
+            const auto lfo = 0.5 + 0.5 * std::sin(flangerPhase);
+            const auto delaySamples = sampleRate
+                * (0.0007 + 0.0055 * flangerDepth * lfo);
+            auto readPosition = static_cast<double>(flangerWritePosition) - delaySamples;
+            while (readPosition < 0.0)
+                readPosition += flangerBufferLength;
+            flangerFirst = static_cast<int>(readPosition) % flangerBufferLength;
+            flangerSecond = (flangerFirst + 1) % flangerBufferLength;
+            flangerAlpha = static_cast<float>(readPosition - std::floor(readPosition));
+        }
+
+        const auto filterA1 = 1.0f / (1.0f + filterG * (filterG + filterK));
+        const auto filterA2 = filterG * filterA1;
+        const auto filterA3 = filterG * filterA2;
+
+        const auto fadeSamples = juce::jlimit(4, 128, stutterSliceLength / 10);
+        auto reverse = stutterCurrentMode == 1;
+        if (stutterCurrentMode == 2)
             reverse = (stutterLoopCount & 1) != 0;
-        const auto readPosition = reverse
+        const auto sliceBase = sliceCapacity - stutterSliceLength;
+        const auto readOffset = reverse
             ? stutterSliceLength - 1 - stutterPlaybackPosition
             : stutterPlaybackPosition;
+        const auto readPosition = sliceBase + readOffset;
+        const auto crossfadeStart = stutterSliceLength - fadeSamples;
+        const auto crossfadeAmount = stutterPlaybackPosition >= crossfadeStart
+            ? static_cast<float>(stutterPlaybackPosition - crossfadeStart + 1)
+                / static_cast<float>(fadeSamples)
+            : 0.0f;
+        auto nextReverse = requestedMode == 1;
+        if (requestedMode == 2)
+            nextReverse = ((stutterLoopCount + 1) & 1) != 0;
+        const auto nextSliceBase = sliceCapacity - stutterRequestedLength;
+        const auto nextLoopStart = nextSliceBase
+            + (nextReverse ? stutterRequestedLength - 1 : 0);
 
         for (int channel = 0; channel < channels; ++channel)
         {
             auto* output = buffer.getWritePointer(channel);
             const auto dry = output[sample];
             stutterHistoryBuffer.setSample(channel, stutterHistoryWritePosition, dry);
-            if (stutterSliceActive && wetMix > 0.0001f)
+            auto wet = dry;
+
+            if (stutterCurrentMode == 3)
             {
-                auto wet = stutterSliceBuffer.getSample(channel, readPosition) * edgeGain;
-                if (mode == 2)
-                    wet = std::round(wet * 28.0f) / 28.0f;
-                output[sample] = dry + wetMix * (wet - dry);
+                auto& state1 = performanceFilterState1[static_cast<size_t>(channel)];
+                auto& state2 = performanceFilterState2[static_cast<size_t>(channel)];
+                const auto v3 = dry - state2;
+                const auto v1 = filterA1 * state1 + filterA2 * v3;
+                const auto v2 = state2 + filterA2 * state1 + filterA3 * v3;
+                state1 = 2.0f * v1 - state1;
+                state2 = 2.0f * v2 - state2;
+                wet = v2;
             }
+            else if (stutterCurrentMode == 4 && flangerBufferLength > 1)
+            {
+                const auto firstValue = flangerBuffer.getSample(channel, flangerFirst);
+                const auto delayed = firstValue + flangerAlpha
+                    * (flangerBuffer.getSample(channel, flangerSecond) - firstValue);
+                flangerBuffer.setSample(channel, flangerWritePosition,
+                                        dry + delayed * flangerFeedback);
+                wet = 0.5f * (dry + delayed);
+            }
+            else if (stutterSliceActive)
+            {
+                wet = stutterSliceBuffer.getSample(channel, readPosition);
+                if (crossfadeAmount > 0.0f)
+                    wet += crossfadeAmount
+                        * (stutterSliceBuffer.getSample(channel, nextLoopStart) - wet);
+                wet *= stutterLoopGain;
+                if (stutterCurrentMode == 2)
+                    wet = std::round(wet * 28.0f) / 28.0f;
+            }
+
+            if (wetMix > 0.0001f)
+                output[sample] = dry + wetMix * (wet - dry);
         }
 
         stutterHistoryWritePosition = (stutterHistoryWritePosition + 1) % historySize;
-        if (stutterSliceActive)
+        if (stutterCurrentMode == 4 && flangerBufferLength > 1)
+        {
+            flangerWritePosition = (flangerWritePosition + 1) % flangerBufferLength;
+            flangerPhase += juce::MathConstants<double>::twoPi * flangerRate / sampleRate;
+            if (flangerPhase >= juce::MathConstants<double>::twoPi)
+                flangerPhase -= juce::MathConstants<double>::twoPi;
+        }
+        else if (stutterSliceActive)
         {
             if (++stutterPlaybackPosition >= stutterSliceLength)
             {
                 stutterPlaybackPosition = 0;
                 ++stutterLoopCount;
-                for (int channel = 0; channel < channels; ++channel)
-                    juce::FloatVectorOperations::multiply(
-                        stutterSliceBuffer.getWritePointer(channel), feedback,
-                        stutterSliceLength);
+                stutterLoopGain *= feedback;
+                stutterSliceLength = stutterRequestedLength;
+                stutterCurrentMode = requestedMode;
             }
-            if (! enabled && wetMix <= 0.0001f && ! stutterWetMix.isSmoothing())
-                stutterSliceActive = false;
         }
+        if (! enabled && wetMix <= 0.0001f && ! stutterWetMix.isSmoothing())
+            stutterSliceActive = false;
     }
     stutterWasEnabled = enabled;
 }

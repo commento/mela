@@ -12,7 +12,9 @@ public:
     {
         repeat,
         reverse,
-        glitch
+        glitch,
+        filter,
+        flanger
     };
 
     PerformancePad();
@@ -37,7 +39,7 @@ private:
     void setSliceMs(float milliseconds);
     void updateButtonColours();
 
-    std::array<juce::TextButton, 3> modeButtons;
+    std::array<juce::TextButton, 5> modeButtons;
     std::array<juce::TextButton, 4> sliceButtons;
     Mode mode = Mode::repeat;
     float x = 0.52f;

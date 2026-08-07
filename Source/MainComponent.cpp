@@ -244,11 +244,16 @@ MainComponent::MainComponent()
         const auto mix = 0.25f + y * 0.75f;
         const auto feedback = 0.72f + y * 0.28f;
         engine.setStutter(active, sliceMs, mix, feedback, static_cast<int>(mode));
-        statusLabel.setText(active
-            ? "XY LIVE | slice " + juce::String(sliceMs, 0) + " ms | intensita "
-                + juce::String(juce::roundToInt(y * 100.0f)) + "%"
-            : "XY pronto — tieni premuto il pad",
-            juce::dontSendNotification);
+        juce::String detail = "slice " + juce::String(sliceMs, 0) + " ms";
+        if (mode == PerformancePad::Mode::filter)
+            detail = "filtro | cutoff "
+                + juce::String(80.0f * std::pow(20000.0f / 80.0f, x), 0) + " Hz";
+        else if (mode == PerformancePad::Mode::flanger)
+            detail = "flanger | rate "
+                + juce::String(0.05f * std::pow(120.0f, x), 2) + " Hz";
+        statusLabel.setText(active ? "XY LIVE | " + detail
+                                   : "XY pronto — tieni premuto il pad",
+                            juce::dontSendNotification);
     };
     dspLoadLabel.setJustificationType(juce::Justification::centredRight);
     dspLoadLabel.setText("DSP 0% | XRUN 0 | ECO 32G", juce::dontSendNotification);

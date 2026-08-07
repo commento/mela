@@ -36,6 +36,7 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
     stutterSliceBuffer.setSize(preparedChannels,
                                static_cast<int>(std::ceil(sampleRate * 0.5)) + 2);
     stutterWetMix.reset(sampleRate, 0.012);
+    stutterLoopGain.reset(sampleRate, 0.012);
     performanceFilterG.reset(sampleRate, 0.025);
     performanceFilterK.reset(sampleRate, 0.025);
     performanceFlangerRate.reset(sampleRate, 0.025);
@@ -78,7 +79,7 @@ void EffectsChain::reset()
     stutterLoopCount = 0;
     stutterWasEnabled = false;
     stutterSliceActive = false;
-    stutterLoopGain = 1.0f;
+    stutterLoopGain.setCurrentAndTargetValue(1.0f);
     stutterWetMix.setCurrentAndTargetValue(0.0f);
     performanceFilterG.setCurrentAndTargetValue(0.1f);
     performanceFilterK.setCurrentAndTargetValue(1.0f);
@@ -327,7 +328,7 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
         stutterCurrentMode = requestedMode;
         stutterPlaybackPosition = 0;
         stutterLoopCount = 0;
-        stutterLoopGain = 1.0f;
+        stutterLoopGain.setCurrentAndTargetValue(1.0f);
         stutterSliceActive = true;
     }
     else if (enabled && ! stutterModeRequested)
@@ -341,6 +342,9 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
     stutterWetMix.setTargetValue(enabled ? requestedWet : 0.0f);
     const auto feedback = stutter.feedback.load();
     const auto flangerBufferLength = flangerBuffer.getNumSamples();
+    // Keep the captured slice intact. Intensity may lower its repeat level, but
+    // it must never cumulatively erase the audio during a long gesture.
+    stutterLoopGain.setTargetValue(feedback);
 
     if (! enabled && ! stutterWetMix.isSmoothing()
         && stutterWetMix.getCurrentValue() <= 0.0001f)
@@ -360,6 +364,7 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
         const auto wetMix = stutterWetMix.getNextValue();
+        const auto loopGain = stutterLoopGain.getNextValue();
         const auto filterG = performanceFilterG.getNextValue();
         const auto filterK = performanceFilterK.getNextValue();
         const auto flangerRate = performanceFlangerRate.getNextValue();
@@ -439,7 +444,7 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
                 if (crossfadeAmount > 0.0f)
                     wet += crossfadeAmount
                         * (stutterSliceBuffer.getSample(channel, nextLoopStart) - wet);
-                wet *= stutterLoopGain;
+                wet *= loopGain;
                 if (stutterCurrentMode == 2)
                     wet = std::round(wet * 28.0f) / 28.0f;
             }
@@ -462,7 +467,7 @@ void EffectsChain::processStutter(juce::AudioBuffer<float>& buffer)
             {
                 stutterPlaybackPosition = 0;
                 ++stutterLoopCount;
-                stutterLoopGain *= feedback;
+                stutterLoopGain.setTargetValue(feedback);
                 stutterSliceLength = stutterRequestedLength;
                 stutterCurrentMode = requestedMode;
             }

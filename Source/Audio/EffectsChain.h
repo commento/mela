@@ -141,7 +141,7 @@ private:
     int stutterLoopCount = 0;
     bool stutterWasEnabled = false;
     bool stutterSliceActive = false;
-    float stutterLoopGain = 1.0f;
+    juce::SmoothedValue<float> stutterLoopGain;
     juce::SmoothedValue<float> stutterWetMix;
     juce::SmoothedValue<float> performanceFilterG;
     juce::SmoothedValue<float> performanceFilterK;

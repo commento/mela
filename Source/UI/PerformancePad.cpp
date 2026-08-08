@@ -87,17 +87,17 @@ void PerformancePad::paint(juce::Graphics& graphics)
 
     graphics.setColour(MelaColours::cream.withAlpha(0.8f));
     graphics.setFont(juce::FontOptions(14.0f, juce::Font::bold));
-    const auto xAxis = mode == Mode::filter ? "CUTOFF  BASSO  →  ALTO"
-                     : mode == Mode::flanger ? "RATE  LENTO  →  VELOCE"
-                                             : "SLICE  LUNGA  →  MICRO";
+    const auto xAxis = mode == Mode::filter ? "CUTOFF  BASSO  >  ALTO"
+                     : mode == Mode::flanger ? "RATE  LENTO  >  VELOCE"
+                                             : "SLICE  LUNGA  >  MICRO";
     graphics.drawText(xAxis, pad.toNearestInt().removeFromBottom(30),
                       juce::Justification::centred);
     graphics.saveState();
     graphics.addTransform(juce::AffineTransform::rotation(-juce::MathConstants<float>::halfPi,
                                                            pad.getX() + 18.0f,
                                                            pad.getCentreY()));
-    const auto yAxis = mode == Mode::filter ? "RISONANZA  →"
-                     : mode == Mode::flanger ? "DEPTH  →" : "INTENSITA  →";
+    const auto yAxis = mode == Mode::filter ? "RISONANZA  >"
+                     : mode == Mode::flanger ? "DEPTH  >" : "INTENSITA  >";
     graphics.drawText(yAxis, juce::roundToInt(pad.getX() - pad.getHeight() * 0.5f + 18.0f),
                       juce::roundToInt(pad.getCentreY() - 14.0f),
                       juce::roundToInt(pad.getHeight()), 28, juce::Justification::centred);

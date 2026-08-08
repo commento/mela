@@ -94,6 +94,12 @@ private:
         int keyboardBaseNote = 24;
         double detuneCents = 7.0;
         double gain = 0.25;
+        double attack = 0.1;
+        double decay = 0.4;
+        double sustain = 0.8;
+        double release = 1.5;
+        int waveform = 0;
+        bool latch = true;
     };
 
     void chooseFile();
@@ -123,6 +129,9 @@ private:
     void updateSlotButtonColours();
     void updateInstrumentControls();
     void updateKeyboardEnvelope();
+    void selectDroneKeys();
+    void updateKeysTargetVisibility();
+    void updateDroneEnabledState();
     juce::var createSceneState(const juce::String& sceneName) const;
     bool restoreSceneState(const juce::var& state, juce::String& errorMessage);
     void applyAllSettingsToEngine();
@@ -155,6 +164,8 @@ private:
     static constexpr int droneEffectTarget = LoopEngine::numberOfSlots;
     static constexpr int masterEffectTarget = LoopEngine::numberOfSlots + 1;
     int effectTarget = 0;
+    bool droneKeysSelected = false;
+    std::vector<int> droneHeldNotes;
 
     enum class HardwareTouchTarget
     {
@@ -169,6 +180,7 @@ private:
     WaveformEditor waveform;
     TouchKeyboard touchKeyboard;
     std::array<juce::TextButton, LoopEngine::numberOfSlots> sampleButtons;
+    juce::TextButton droneKeysButton { "DRONE" };
     juce::TextButton loadButton { "CARICA LOOP" };
     juce::TextButton deleteSampleButton { "ELIMINA SAMPLE" };
     juce::TextButton recordButton { "REC" };
@@ -202,10 +214,13 @@ private:
     juce::Label keySustainLabel;
     juce::Label keyReleaseLabel;
     juce::ToggleButton droneButton { "BASS DRONE" };
+    juce::ToggleButton droneLatchButton { "LATCH" };
     TouchSlider droneDetuneSlider;
     TouchSlider droneGainSlider;
     juce::Label droneDetuneLabel;
     juce::Label droneGainLabel;
+    juce::Label droneWaveformLabel;
+    juce::ComboBox droneWaveformBox;
 
     TouchSlider speedSlider;
     TouchSlider pitchSlider;

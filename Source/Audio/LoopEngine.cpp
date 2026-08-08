@@ -270,6 +270,20 @@ void LoopEngine::setDroneGain(float gain)
     droneGain.store(juce::jlimit(0.0f, 0.7f, gain));
 }
 
+void LoopEngine::setDroneEnvelope(double attack, double decay,
+                                  float sustain, double release)
+{
+    droneAttack.store(juce::jlimit(0.0, 10.0, attack));
+    droneDecay.store(juce::jlimit(0.0, 10.0, decay));
+    droneSustain.store(juce::jlimit(0.0f, 1.0f, sustain));
+    droneRelease.store(juce::jlimit(0.0, 20.0, release));
+}
+
+void LoopEngine::setDroneWaveform(int waveform)
+{
+    droneWaveform.store(juce::jlimit(0, 1, waveform));
+}
+
 void LoopEngine::setDroneEqualizer(float lowDb, float midDb, float highDb)
 {
     droneEffects.setEqualizer(lowDb, midDb, highDb);
@@ -535,7 +549,32 @@ void LoopEngine::renderDrone(juce::AudioBuffer<float>& mix, int numSamples)
 
     const auto targetFrequency = juce::MidiMessage::getMidiNoteInHertz(
         droneMidiNote.load());
-    const auto targetGain = droneEnabled.load() ? droneGain.load() : 0.0f;
+    const auto enabled = droneEnabled.load();
+    const auto midiNote = droneMidiNote.load();
+    if (enabled && (! droneWasEnabled || midiNote != lastDroneMidiNote))
+    {
+        droneEnvelopeStage = EnvelopeStage::attack;
+        droneReleaseStep = 0.0f;
+    }
+    else if (! enabled && droneWasEnabled)
+    {
+        const auto release = droneRelease.load();
+        if (release <= 0.0 || droneEnvelopeLevel <= 0.0f)
+        {
+            droneEnvelopeLevel = 0.0f;
+            droneEnvelopeStage = EnvelopeStage::idle;
+        }
+        else
+        {
+            droneReleaseStep = droneEnvelopeLevel
+                / static_cast<float>(juce::jmax(1.0, release * deviceSampleRate));
+            droneEnvelopeStage = EnvelopeStage::release;
+        }
+    }
+    droneWasEnabled = enabled;
+    lastDroneMidiNote = midiNote;
+
+    const auto targetGain = droneGain.load();
     const auto frequencySmoothing = 1.0 - std::exp(-1.0 / (0.025 * deviceSampleRate));
     const auto gainSmoothing = static_cast<float>(
         1.0 - std::exp(-1.0 / (0.012 * deviceSampleRate)));
@@ -554,6 +593,20 @@ void LoopEngine::renderDrone(juce::AudioBuffer<float>& mix, int numSamples)
         }
         return 0.0;
     };
+    const auto oscillator = [polyBlep](double phase, double increment, int waveform)
+    {
+        if (waveform == 0)
+            return 2.0 * phase - 1.0 - polyBlep(phase, increment);
+
+        auto square = phase < 0.5 ? 1.0 : -1.0;
+        square += polyBlep(phase, increment);
+        auto secondEdge = phase + 0.5;
+        if (secondEdge >= 1.0)
+            secondEdge -= 1.0;
+        square -= polyBlep(secondEdge, increment);
+        return square;
+    };
+    const auto waveform = droneWaveform.load();
 
     for (int frame = 0; frame < numSamples; ++frame)
     {
@@ -566,10 +619,10 @@ void LoopEngine::renderDrone(juce::AudioBuffer<float>& mix, int numSamples)
             * std::pow(2.0, -halfDetune / 12.0) / deviceSampleRate);
         const auto incrementB = juce::jmin(0.49, smoothedDroneFrequency
             * std::pow(2.0, halfDetune / 12.0) / deviceSampleRate);
-        const auto sawA = 2.0 * dronePhaseA - 1.0 - polyBlep(dronePhaseA, incrementA);
-        const auto sawB = 2.0 * dronePhaseB - 1.0 - polyBlep(dronePhaseB, incrementB);
-        const auto sample = static_cast<float>((sawA + sawB) * 0.5)
-                          * smoothedDroneGain;
+        const auto waveA = oscillator(dronePhaseA, incrementA, waveform);
+        const auto waveB = oscillator(dronePhaseB, incrementB, waveform);
+        const auto sample = static_cast<float>((waveA + waveB) * 0.5)
+                          * smoothedDroneGain * advanceDroneEnvelope();
 
         for (int channel = 0; channel < channels; ++channel)
             mix.addSample(channel, frame, sample);
@@ -581,6 +634,65 @@ void LoopEngine::renderDrone(juce::AudioBuffer<float>& mix, int numSamples)
         if (dronePhaseB >= 1.0)
             dronePhaseB -= 1.0;
     }
+}
+
+float LoopEngine::advanceDroneEnvelope()
+{
+    if (droneEnvelopeStage == EnvelopeStage::idle)
+        return 0.0f;
+
+    if (droneEnvelopeStage == EnvelopeStage::attack)
+    {
+        const auto attack = droneAttack.load();
+        if (attack <= 0.0)
+        {
+            droneEnvelopeLevel = 1.0f;
+            droneEnvelopeStage = EnvelopeStage::decay;
+        }
+        else
+        {
+            droneEnvelopeLevel += 1.0f
+                / static_cast<float>(juce::jmax(1.0, attack * deviceSampleRate));
+            if (droneEnvelopeLevel >= 1.0f)
+            {
+                droneEnvelopeLevel = 1.0f;
+                droneEnvelopeStage = EnvelopeStage::decay;
+            }
+        }
+    }
+
+    if (droneEnvelopeStage == EnvelopeStage::decay)
+    {
+        const auto sustain = droneSustain.load();
+        const auto decay = droneDecay.load();
+        if (decay <= 0.0)
+        {
+            droneEnvelopeLevel = sustain;
+            droneEnvelopeStage = EnvelopeStage::sustain;
+        }
+        else
+        {
+            droneEnvelopeLevel -= (1.0f - sustain)
+                / static_cast<float>(juce::jmax(1.0, decay * deviceSampleRate));
+            if (droneEnvelopeLevel <= sustain)
+            {
+                droneEnvelopeLevel = sustain;
+                droneEnvelopeStage = EnvelopeStage::sustain;
+            }
+        }
+    }
+    else if (droneEnvelopeStage == EnvelopeStage::sustain)
+        droneEnvelopeLevel = droneSustain.load();
+    else if (droneEnvelopeStage == EnvelopeStage::release)
+    {
+        droneEnvelopeLevel -= droneReleaseStep;
+        if (droneEnvelopeLevel <= 0.0f)
+        {
+            droneEnvelopeLevel = 0.0f;
+            droneEnvelopeStage = EnvelopeStage::idle;
+        }
+    }
+    return juce::jlimit(0.0f, 1.0f, droneEnvelopeLevel);
 }
 
 void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
@@ -640,6 +752,10 @@ void LoopEngine::audioDeviceStopped()
     for (auto& effects : slotEffects)
         effects.chain.reset();
     droneEffects.reset();
+    droneWasEnabled = false;
+    droneEnvelopeStage = EnvelopeStage::idle;
+    droneEnvelopeLevel = 0.0f;
+    droneReleaseStep = 0.0f;
     for (auto& voice : voices)
         voice.stretchResetRequested.store(true);
     masterEffects.reset();

@@ -60,6 +60,9 @@ public:
     void setDroneNote(int midiNote);
     void setDroneDetune(float cents);
     void setDroneGain(float gain);
+    void setDroneEnvelope(double attackSeconds, double decaySeconds,
+                          float sustainLevel, double releaseSeconds);
+    void setDroneWaveform(int waveform);
     void setDroneEqualizer(float lowDb, float midDb, float highDb);
     void setDroneDistortion(bool enabled, float drive, float toneHz, float mix);
     void setDroneGranular(bool enabled, float sizeMs, float densityHz,
@@ -210,6 +213,7 @@ private:
                                float* const* outputs, int outputChannels, int numSamples);
     float advanceInstrumentEnvelope(InstrumentVoice& instrumentVoice);
     void renderDrone(juce::AudioBuffer<float>& mix, int numSamples);
+    float advanceDroneEnvelope();
 
     juce::AudioFormatManager formatManager;
     std::array<Voice, numberOfSlots> voices;
@@ -245,10 +249,20 @@ private:
     std::atomic<int> droneMidiNote { 24 };
     std::atomic<float> droneDetuneCents { 7.0f };
     std::atomic<float> droneGain { 0.25f };
+    std::atomic<double> droneAttack { 0.1 };
+    std::atomic<double> droneDecay { 0.4 };
+    std::atomic<float> droneSustain { 0.8f };
+    std::atomic<double> droneRelease { 1.5 };
+    std::atomic<int> droneWaveform { 0 };
     double dronePhaseA = 0.0;
     double dronePhaseB = 0.0;
     double smoothedDroneFrequency = 32.703196;
     float smoothedDroneGain = 0.0f;
+    EnvelopeStage droneEnvelopeStage = EnvelopeStage::idle;
+    float droneEnvelopeLevel = 0.0f;
+    float droneReleaseStep = 0.0f;
+    bool droneWasEnabled = false;
+    int lastDroneMidiNote = 24;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoopEngine)
 };

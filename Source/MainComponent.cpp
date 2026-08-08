@@ -226,11 +226,12 @@ MainComponent::MainComponent()
         addAndMakeVisible(panel);
     addAndMakeVisible(equalizerPanel);
 
-    for (int target = 0; target <= LoopEngine::numberOfSlots; ++target)
+    for (int target = 0; target <= masterEffectTarget; ++target)
     {
         auto& button = effectTargetButtons[static_cast<size_t>(target)];
         button.setButtonText(target < LoopEngine::numberOfSlots
-                                 ? "S" + juce::String(target + 1) : "MASTER");
+                                 ? "S" + juce::String(target + 1)
+                                 : target == droneEffectTarget ? "DRONE" : "MASTER");
         button.onClick = [this, target] { selectEffectTarget(target); };
         addAndMakeVisible(button);
     }
@@ -374,6 +375,9 @@ MainComponent::MainComponent()
         engine.setDroneEnabled(droneSettings.enabled);
         if (droneSettings.enabled)
             engine.allNotesOff(activeSlot);
+        touchKeyboard.setBaseMidiNote(droneSettings.enabled
+            ? droneSettings.keyboardBaseNote
+            : slotSettings[static_cast<size_t>(activeSlot)].keyboardBaseNote);
         statusLabel.setText(droneSettings.enabled
                 ? "DRONE ON | tocca un tasto per cambiare nota"
                 : "DRONE OFF | tastiera sample attiva",
@@ -445,12 +449,26 @@ MainComponent::MainComponent()
     };
     octaveDownButton.onClick = [this]
     {
+        if (droneSettings.enabled)
+        {
+            droneSettings.keyboardBaseNote = juce::jlimit(
+                0, 104, droneSettings.keyboardBaseNote - 12);
+            touchKeyboard.setBaseMidiNote(droneSettings.keyboardBaseNote);
+            return;
+        }
         auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
         settings.keyboardBaseNote = juce::jlimit(0, 104, settings.keyboardBaseNote - 12);
         touchKeyboard.setBaseMidiNote(settings.keyboardBaseNote);
     };
     octaveUpButton.onClick = [this]
     {
+        if (droneSettings.enabled)
+        {
+            droneSettings.keyboardBaseNote = juce::jlimit(
+                0, 104, droneSettings.keyboardBaseNote + 12);
+            touchKeyboard.setBaseMidiNote(droneSettings.keyboardBaseNote);
+            return;
+        }
         auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
         settings.keyboardBaseNote = juce::jlimit(0, 104, settings.keyboardBaseNote + 12);
         touchKeyboard.setBaseMidiNote(settings.keyboardBaseNote);
@@ -873,7 +891,7 @@ void MainComponent::resized()
             button.setBounds(targetRow.removeFromLeft(targetWidth).reduced(5, 2));
         content.removeFromTop(8);
 
-        if (effectTarget < LoopEngine::numberOfSlots)
+        if (effectTarget != masterEffectTarget)
         {
             auto utilityColumn = content.removeFromRight(260).reduced(8);
             equalizerPanel.setBounds(utilityColumn.removeFromTop(180).reduced(4));
@@ -1557,9 +1575,11 @@ void MainComponent::updateEnvelope()
 
 void MainComponent::updateEffects()
 {
-    if (effectTarget < LoopEngine::numberOfSlots)
+    if (effectTarget != masterEffectTarget)
     {
-        auto& settings = slotEffectSettings[static_cast<size_t>(effectTarget)];
+        auto& settings = effectTarget == droneEffectTarget
+            ? droneEffectSettings
+            : slotEffectSettings[static_cast<size_t>(effectTarget)];
         for (int index = 0; index < 3; ++index)
             settings.equalizer[static_cast<size_t>(index)] = equalizerPanel.value(index);
         settings.distortionEnabled = distortionPanel.isEnabled();
@@ -1577,31 +1597,62 @@ void MainComponent::updateEffects()
         settings.delaySend = delaySendSlider.getValue();
         settings.reverbSend = reverbSendSlider.getValue();
 
-        engine.setEqualizer(effectTarget,
-            static_cast<float>(settings.equalizer[0]),
-            static_cast<float>(settings.equalizer[1]),
-            static_cast<float>(settings.equalizer[2]));
-        engine.setDistortion(effectTarget, settings.distortionEnabled,
-            static_cast<float>(settings.distortion[0]),
-            static_cast<float>(settings.distortion[1]),
-            static_cast<float>(settings.distortion[2]));
-        engine.setGranular(effectTarget, settings.granularEnabled,
-            static_cast<float>(settings.granular[0]),
-            static_cast<float>(settings.granular[1]),
-            static_cast<float>(settings.granular[2]),
-            static_cast<float>(settings.granular[3]),
-            static_cast<float>(settings.granular[4]));
-        engine.setFlanger(effectTarget, settings.flangerEnabled,
-            static_cast<float>(settings.flanger[0]),
-            static_cast<float>(settings.flanger[1]),
-            static_cast<float>(settings.flanger[2]),
-            static_cast<float>(settings.flanger[3]));
-        engine.setChorus(effectTarget, settings.chorusEnabled,
-            static_cast<float>(settings.chorus[0]),
-            static_cast<float>(settings.chorus[1]),
-            static_cast<float>(settings.chorus[2]));
-        engine.setDelaySend(effectTarget, static_cast<float>(settings.delaySend));
-        engine.setReverbSend(effectTarget, static_cast<float>(settings.reverbSend));
+        if (effectTarget == droneEffectTarget)
+        {
+            engine.setDroneEqualizer(
+                static_cast<float>(settings.equalizer[0]),
+                static_cast<float>(settings.equalizer[1]),
+                static_cast<float>(settings.equalizer[2]));
+            engine.setDroneDistortion(settings.distortionEnabled,
+                static_cast<float>(settings.distortion[0]),
+                static_cast<float>(settings.distortion[1]),
+                static_cast<float>(settings.distortion[2]));
+            engine.setDroneGranular(settings.granularEnabled,
+                static_cast<float>(settings.granular[0]),
+                static_cast<float>(settings.granular[1]),
+                static_cast<float>(settings.granular[2]),
+                static_cast<float>(settings.granular[3]),
+                static_cast<float>(settings.granular[4]));
+            engine.setDroneFlanger(settings.flangerEnabled,
+                static_cast<float>(settings.flanger[0]),
+                static_cast<float>(settings.flanger[1]),
+                static_cast<float>(settings.flanger[2]),
+                static_cast<float>(settings.flanger[3]));
+            engine.setDroneChorus(settings.chorusEnabled,
+                static_cast<float>(settings.chorus[0]),
+                static_cast<float>(settings.chorus[1]),
+                static_cast<float>(settings.chorus[2]));
+            engine.setDroneDelaySend(static_cast<float>(settings.delaySend));
+            engine.setDroneReverbSend(static_cast<float>(settings.reverbSend));
+        }
+        else
+        {
+            engine.setEqualizer(effectTarget,
+                static_cast<float>(settings.equalizer[0]),
+                static_cast<float>(settings.equalizer[1]),
+                static_cast<float>(settings.equalizer[2]));
+            engine.setDistortion(effectTarget, settings.distortionEnabled,
+                static_cast<float>(settings.distortion[0]),
+                static_cast<float>(settings.distortion[1]),
+                static_cast<float>(settings.distortion[2]));
+            engine.setGranular(effectTarget, settings.granularEnabled,
+                static_cast<float>(settings.granular[0]),
+                static_cast<float>(settings.granular[1]),
+                static_cast<float>(settings.granular[2]),
+                static_cast<float>(settings.granular[3]),
+                static_cast<float>(settings.granular[4]));
+            engine.setFlanger(effectTarget, settings.flangerEnabled,
+                static_cast<float>(settings.flanger[0]),
+                static_cast<float>(settings.flanger[1]),
+                static_cast<float>(settings.flanger[2]),
+                static_cast<float>(settings.flanger[3]));
+            engine.setChorus(effectTarget, settings.chorusEnabled,
+                static_cast<float>(settings.chorus[0]),
+                static_cast<float>(settings.chorus[1]),
+                static_cast<float>(settings.chorus[2]));
+            engine.setDelaySend(effectTarget, static_cast<float>(settings.delaySend));
+            engine.setReverbSend(effectTarget, static_cast<float>(settings.reverbSend));
+        }
         return;
     }
 
@@ -1630,14 +1681,17 @@ void MainComponent::updateEffects()
 
 void MainComponent::selectEffectTarget(int targetIndex)
 {
-    if (! juce::isPositiveAndBelow(targetIndex, LoopEngine::numberOfSlots + 1))
+    if (! juce::isPositiveAndBelow(targetIndex, masterEffectTarget + 1))
         return;
     effectTarget = targetIndex;
 
-    if (effectTarget < LoopEngine::numberOfSlots)
+    if (effectTarget != masterEffectTarget)
     {
-        const auto& settings = slotEffectSettings[static_cast<size_t>(effectTarget)];
-        equalizerPanel.setTitle("EQ SAMPLE " + juce::String(effectTarget + 1));
+        const auto& settings = effectTarget == droneEffectTarget
+            ? droneEffectSettings
+            : slotEffectSettings[static_cast<size_t>(effectTarget)];
+        equalizerPanel.setTitle(effectTarget == droneEffectTarget
+            ? "EQ DRONE" : "EQ SAMPLE " + juce::String(effectTarget + 1));
         for (int index = 0; index < 3; ++index)
             equalizerPanel.setValue(index, settings.equalizer[static_cast<size_t>(index)]);
         distortionPanel.setEnabled(settings.distortionEnabled);
@@ -1671,7 +1725,7 @@ void MainComponent::selectEffectTarget(int targetIndex)
         }
     }
 
-    for (int target = 0; target <= LoopEngine::numberOfSlots; ++target)
+    for (int target = 0; target <= masterEffectTarget; ++target)
         effectTargetButtons[static_cast<size_t>(target)].setColour(
             juce::TextButton::buttonColourId,
             target == effectTarget ? MelaColours::sky
@@ -1683,7 +1737,7 @@ void MainComponent::selectEffectTarget(int targetIndex)
 void MainComponent::updateEffectPageVisibility()
 {
     const auto showEffects = currentPage == Page::effects;
-    const auto showSlot = showEffects && effectTarget < LoopEngine::numberOfSlots;
+    const auto showSlot = showEffects && effectTarget != masterEffectTarget;
     for (auto& button : effectTargetButtons)
         button.setVisible(showEffects);
     dspLoadLabel.setVisible(showEffects);
@@ -1832,7 +1886,8 @@ void MainComponent::showPage(Page pageToShow)
 void MainComponent::updateInstrumentControls()
 {
     const auto& settings = slotSettings[static_cast<size_t>(activeSlot)];
-    touchKeyboard.setBaseMidiNote(settings.keyboardBaseNote);
+    touchKeyboard.setBaseMidiNote(droneSettings.enabled
+        ? droneSettings.keyboardBaseNote : settings.keyboardBaseNote);
     rootNoteLabel.setText("ROOT: " + juce::MidiMessage::getMidiNoteName(
                               settings.instrumentRootNote, true, true, 4),
                           juce::dontSendNotification);
@@ -1885,7 +1940,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     };
 
     auto root = new juce::DynamicObject();
-    root->setProperty("version", 4);
+    root->setProperty("version", 5);
     root->setProperty("name", sceneName);
     root->setProperty("activeSlot", activeSlot);
 
@@ -1944,8 +1999,20 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     auto drone = new juce::DynamicObject();
     drone->setProperty("enabled", droneSettings.enabled);
     drone->setProperty("midiNote", droneSettings.midiNote);
+    drone->setProperty("keyboardBaseNote", droneSettings.keyboardBaseNote);
     drone->setProperty("detuneCents", droneSettings.detuneCents);
     drone->setProperty("gain", droneSettings.gain);
+    drone->setProperty("equalizer", valuesToVar(droneEffectSettings.equalizer));
+    drone->setProperty("distortionEnabled", droneEffectSettings.distortionEnabled);
+    drone->setProperty("distortion", valuesToVar(droneEffectSettings.distortion));
+    drone->setProperty("granularEnabled", droneEffectSettings.granularEnabled);
+    drone->setProperty("granular", valuesToVar(droneEffectSettings.granular));
+    drone->setProperty("flangerEnabled", droneEffectSettings.flangerEnabled);
+    drone->setProperty("flanger", valuesToVar(droneEffectSettings.flanger));
+    drone->setProperty("chorusEnabled", droneEffectSettings.chorusEnabled);
+    drone->setProperty("chorus", valuesToVar(droneEffectSettings.chorus));
+    drone->setProperty("delaySend", droneEffectSettings.delaySend);
+    drone->setProperty("reverbSend", droneEffectSettings.reverbSend);
     root->setProperty("drone", juce::var(drone));
     return juce::var(root);
 }
@@ -2085,18 +2152,38 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         readArray(master, "reverb", masterEffectSettings.reverb);
     }
 
+    droneEffectSettings = {};
     if (auto* drone = root->getProperty("drone").getDynamicObject())
     {
         droneSettings.enabled = boolean(drone, "enabled", false);
         droneSettings.midiNote = juce::jlimit(0, 127,
             integer(drone, "midiNote", droneSettings.midiNote));
+        droneSettings.keyboardBaseNote = juce::jlimit(0, 104,
+            integer(drone, "keyboardBaseNote", 24));
         droneSettings.detuneCents = juce::jlimit(0.0, 50.0,
             number(drone, "detuneCents", droneSettings.detuneCents));
         droneSettings.gain = juce::jlimit(0.0, 0.7,
             number(drone, "gain", droneSettings.gain));
+        readArray(drone, "equalizer", droneEffectSettings.equalizer);
+        droneEffectSettings.distortionEnabled = boolean(
+            drone, "distortionEnabled", false);
+        droneEffectSettings.granularEnabled = boolean(
+            drone, "granularEnabled", false);
+        droneEffectSettings.flangerEnabled = boolean(
+            drone, "flangerEnabled", false);
+        droneEffectSettings.chorusEnabled = boolean(
+            drone, "chorusEnabled", false);
+        readArray(drone, "distortion", droneEffectSettings.distortion);
+        readArray(drone, "granular", droneEffectSettings.granular);
+        readArray(drone, "flanger", droneEffectSettings.flanger);
+        readArray(drone, "chorus", droneEffectSettings.chorus);
+        droneEffectSettings.delaySend = number(
+            drone, "delaySend", droneEffectSettings.delaySend);
+        droneEffectSettings.reverbSend = number(
+            drone, "reverbSend", droneEffectSettings.reverbSend);
     }
     else
-        droneSettings.enabled = false;
+        droneSettings = {};
 
     applyAllSettingsToEngine();
     activeSlot = juce::jlimit(0, LoopEngine::numberOfSlots - 1,
@@ -2105,7 +2192,7 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
     droneButton.setToggleState(droneSettings.enabled, juce::dontSendNotification);
     droneDetuneSlider.setValue(droneSettings.detuneCents, juce::dontSendNotification);
     droneGainSlider.setValue(droneSettings.gain, juce::dontSendNotification);
-    selectEffectTarget(juce::jlimit(0, LoopEngine::numberOfSlots, effectTarget));
+    selectEffectTarget(juce::jlimit(0, masterEffectTarget, effectTarget));
     errorMessage = missingFiles > 0 ? loadWarnings.trimEnd() : juce::String {};
     return true;
 }
@@ -2168,6 +2255,31 @@ void MainComponent::applyAllSettingsToEngine()
     engine.setDroneDetune(static_cast<float>(droneSettings.detuneCents));
     engine.setDroneGain(static_cast<float>(droneSettings.gain));
     engine.setDroneEnabled(droneSettings.enabled);
+    engine.setDroneEqualizer(
+        static_cast<float>(droneEffectSettings.equalizer[0]),
+        static_cast<float>(droneEffectSettings.equalizer[1]),
+        static_cast<float>(droneEffectSettings.equalizer[2]));
+    engine.setDroneDistortion(droneEffectSettings.distortionEnabled,
+        static_cast<float>(droneEffectSettings.distortion[0]),
+        static_cast<float>(droneEffectSettings.distortion[1]),
+        static_cast<float>(droneEffectSettings.distortion[2]));
+    engine.setDroneGranular(droneEffectSettings.granularEnabled,
+        static_cast<float>(droneEffectSettings.granular[0]),
+        static_cast<float>(droneEffectSettings.granular[1]),
+        static_cast<float>(droneEffectSettings.granular[2]),
+        static_cast<float>(droneEffectSettings.granular[3]),
+        static_cast<float>(droneEffectSettings.granular[4]));
+    engine.setDroneFlanger(droneEffectSettings.flangerEnabled,
+        static_cast<float>(droneEffectSettings.flanger[0]),
+        static_cast<float>(droneEffectSettings.flanger[1]),
+        static_cast<float>(droneEffectSettings.flanger[2]),
+        static_cast<float>(droneEffectSettings.flanger[3]));
+    engine.setDroneChorus(droneEffectSettings.chorusEnabled,
+        static_cast<float>(droneEffectSettings.chorus[0]),
+        static_cast<float>(droneEffectSettings.chorus[1]),
+        static_cast<float>(droneEffectSettings.chorus[2]));
+    engine.setDroneDelaySend(static_cast<float>(droneEffectSettings.delaySend));
+    engine.setDroneReverbSend(static_cast<float>(droneEffectSettings.reverbSend));
 }
 
 juce::File MainComponent::sceneFile(int sceneIndex) const

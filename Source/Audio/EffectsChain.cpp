@@ -237,6 +237,11 @@ void EffectsChain::setGranular(bool enabled, float sizeMs, float densityHz,
     granular.mix.store(juce::jlimit(0.0f, 1.0f, mix));
 }
 
+void EffectsChain::setMaximumActiveGrains(int maximum)
+{
+    activeGrainLimit.store(juce::jlimit(1, maximumGrains, maximum));
+}
+
 void EffectsChain::setFlanger(bool enabled, float rateHz, float depth,
                               float feedback, float mix)
 {
@@ -548,8 +553,11 @@ void EffectsChain::processGranular(juce::AudioBuffer<float>& buffer)
         {
             if (samplesUntilNextGrain <= 0.0)
             {
+                auto grainsConsidered = 0;
                 for (auto& grain : grains)
                 {
+                    if (grainsConsidered++ >= activeGrainLimit.load())
+                        break;
                     if (grain.active)
                         continue;
 

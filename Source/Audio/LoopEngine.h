@@ -60,6 +60,15 @@ public:
     void setDroneNote(int midiNote);
     void setDroneDetune(float cents);
     void setDroneGain(float gain);
+    void setDroneEqualizer(float lowDb, float midDb, float highDb);
+    void setDroneDistortion(bool enabled, float drive, float toneHz, float mix);
+    void setDroneGranular(bool enabled, float sizeMs, float densityHz,
+                          float positionMs, float pitchSemitones, float mix);
+    void setDroneFlanger(bool enabled, float rateHz, float depth,
+                         float feedback, float mix);
+    void setDroneChorus(bool enabled, float rateHz, float depth, float mix);
+    void setDroneDelaySend(float amount);
+    void setDroneReverbSend(float amount);
 
     bool startRecording(const juce::File& destination, juce::String& errorMessage);
     juce::File stopRecording();
@@ -220,6 +229,9 @@ private:
     };
     std::array<SlotEffects, numberOfSlots> slotEffects;
     EffectsChain masterEffects;
+    EffectsChain droneEffects;
+    std::atomic<float> droneDelaySend { 0.15f };
+    std::atomic<float> droneReverbSend { 0.15f };
     std::array<juce::AudioBuffer<float>, numberOfSlots> slotEffectBuffers;
     std::array<juce::AudioBuffer<float>, numberOfSlots> stretchOutputBuffers;
     struct StretchState;
@@ -227,14 +239,15 @@ private:
     juce::AudioBuffer<float> masterMixBuffer;
     juce::AudioBuffer<float> delaySendBuffer;
     juce::AudioBuffer<float> reverbSendBuffer;
+    juce::AudioBuffer<float> droneEffectBuffer;
 
     std::atomic<bool> droneEnabled { false };
-    std::atomic<int> droneMidiNote { 36 };
+    std::atomic<int> droneMidiNote { 24 };
     std::atomic<float> droneDetuneCents { 7.0f };
     std::atomic<float> droneGain { 0.25f };
     double dronePhaseA = 0.0;
     double dronePhaseB = 0.0;
-    double smoothedDroneFrequency = 65.406391;
+    double smoothedDroneFrequency = 32.703196;
     float smoothedDroneGain = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoopEngine)

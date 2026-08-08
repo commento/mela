@@ -90,7 +90,8 @@ private:
     struct DroneSettings
     {
         bool enabled = false;
-        int midiNote = 36;
+        int midiNote = 24;
+        int keyboardBaseNote = 24;
         double detuneCents = 7.0;
         double gain = 0.25;
     };
@@ -146,10 +147,13 @@ private:
     int recordingSlot = -1;
     std::array<SlotSettings, LoopEngine::numberOfSlots> slotSettings;
     std::array<SlotEffectSettings, LoopEngine::numberOfSlots> slotEffectSettings;
+    SlotEffectSettings droneEffectSettings;
     std::array<juce::File, LoopEngine::numberOfSlots> slotSourceFiles;
     std::array<bool, LoopEngine::numberOfSlots> slotSourceIsRecording {};
     MasterEffectSettings masterEffectSettings;
     DroneSettings droneSettings;
+    static constexpr int droneEffectTarget = LoopEngine::numberOfSlots;
+    static constexpr int masterEffectTarget = LoopEngine::numberOfSlots + 1;
     int effectTarget = 0;
 
     enum class HardwareTouchTarget
@@ -268,7 +272,7 @@ private:
     EffectPanel reverbPanel;
     EqualizerPanel equalizerPanel;
     PerformancePad performancePad;
-    std::array<juce::TextButton, LoopEngine::numberOfSlots + 1> effectTargetButtons;
+    std::array<juce::TextButton, LoopEngine::numberOfSlots + 2> effectTargetButtons;
     TouchSlider delaySendSlider;
     TouchSlider reverbSendSlider;
     juce::Label delaySendLabel;

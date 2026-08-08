@@ -35,6 +35,9 @@ struct LoopEngine::StretchState
 LoopEngine::LoopEngine()
 {
     formatManager.registerBasicFormats();
+    for (auto& effects : slotEffects)
+        effects.chain.setMaximumActiveGrains(7);
+    droneEffects.setMaximumActiveGrains(4);
     for (auto& state : stretchStates)
         state = std::make_unique<StretchState>();
 }
@@ -267,6 +270,44 @@ void LoopEngine::setDroneGain(float gain)
     droneGain.store(juce::jlimit(0.0f, 0.7f, gain));
 }
 
+void LoopEngine::setDroneEqualizer(float lowDb, float midDb, float highDb)
+{
+    droneEffects.setEqualizer(lowDb, midDb, highDb);
+}
+
+void LoopEngine::setDroneDistortion(bool enabled, float drive, float toneHz, float mix)
+{
+    droneEffects.setDistortion(enabled, drive, toneHz, mix);
+}
+
+void LoopEngine::setDroneGranular(bool enabled, float sizeMs, float densityHz,
+                                  float positionMs, float pitchSemitones, float mix)
+{
+    droneEffects.setGranular(enabled, sizeMs, densityHz, positionMs,
+                             pitchSemitones, mix);
+}
+
+void LoopEngine::setDroneFlanger(bool enabled, float rateHz, float depth,
+                                 float feedback, float mix)
+{
+    droneEffects.setFlanger(enabled, rateHz, depth, feedback, mix);
+}
+
+void LoopEngine::setDroneChorus(bool enabled, float rateHz, float depth, float mix)
+{
+    droneEffects.setChorus(enabled, rateHz, depth, mix);
+}
+
+void LoopEngine::setDroneDelaySend(float amount)
+{
+    droneDelaySend.store(juce::jlimit(0.0f, 1.0f, amount));
+}
+
+void LoopEngine::setDroneReverbSend(float amount)
+{
+    droneReverbSend.store(juce::jlimit(0.0f, 1.0f, amount));
+}
+
 bool LoopEngine::startRecording(const juce::File& destination, juce::String& errorMessage)
 {
     return recorder.start(destination, deviceSampleRate,
@@ -453,7 +494,21 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         }
     }
 
-    renderDrone(mix, numSamples);
+    juce::AudioBuffer<float> droneBuffer(droneEffectBuffer.getArrayOfWritePointers(),
+                                          channels, numSamples);
+    droneBuffer.clear();
+    renderDrone(droneBuffer, numSamples);
+    droneEffects.processInserts(droneBuffer);
+    const auto droneDelay = droneDelaySend.load();
+    const auto droneReverb = droneReverbSend.load();
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        mix.addFrom(channel, 0, droneBuffer, channel, 0, numSamples);
+        if (droneDelay > 0.0f)
+            delayBus.addFrom(channel, 0, droneBuffer, channel, 0, numSamples, droneDelay);
+        if (droneReverb > 0.0f)
+            reverbBus.addFrom(channel, 0, droneBuffer, channel, 0, numSamples, droneReverb);
+    }
 
     masterEffects.processEqualizer(mix);
     masterEffects.processDelayReturn(delayBus);
@@ -561,6 +616,7 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
             1, device->getActiveOutputChannels().countNumberOfSetBits());
         for (auto& effects : slotEffects)
             effects.chain.prepare(deviceSampleRate, maximumBlockSize, channels);
+        droneEffects.prepare(deviceSampleRate, maximumBlockSize, channels);
         masterEffects.prepare(deviceSampleRate, maximumBlockSize, channels);
         for (auto& buffer : slotEffectBuffers)
             buffer.setSize(channels, maximumBlockSize, false, true, false);
@@ -574,6 +630,7 @@ void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
         masterMixBuffer.setSize(channels, maximumBlockSize, false, true, false);
         delaySendBuffer.setSize(channels, maximumBlockSize, false, true, false);
         reverbSendBuffer.setSize(channels, maximumBlockSize, false, true, false);
+        droneEffectBuffer.setSize(channels, maximumBlockSize, false, true, false);
     }
 }
 
@@ -582,6 +639,7 @@ void LoopEngine::audioDeviceStopped()
     activeInputChannels.store(0);
     for (auto& effects : slotEffects)
         effects.chain.reset();
+    droneEffects.reset();
     for (auto& voice : voices)
         voice.stretchResetRequested.store(true);
     masterEffects.reset();

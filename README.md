@@ -32,13 +32,13 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - equalizzatore LOW/MID/HIGH indipendente per ogni sample e per il master;
 - Distorsione, Granulare, Flanger e Chorus configurabili separatamente per slot;
 - mandate Delay Send e Reverb Send per slot verso due effetti master condivisi;
-- selettori S1-S4 e MASTER, indicatore DSP/XRUN e limite ECO di 32 grani complessivi;
+- selettori S1-S4, DRONE e MASTER, indicatore DSP/XRUN e limite ECO di 32 grani complessivi;
 - sintesi granulare real-time con Size, Density, Position, Pitch e Mix;
 - bypass e mix indipendenti per ogni effetto;
 - limiter master unico per proteggere il mix finale dal clipping;
 - pagina KEYS con tastiera multitouch a due ottave e otto voci polifoniche;
 - basso drone monofonico nella pagina KEYS, con due dente di sega anti-alias,
-  detune regolabile e cambio nota latchato dalla tastiera;
+  detune regolabile, cambio nota latchato dalla tastiera e canale FX dedicato;
 - pagina SCENE con otto snapshot rinominabili: salva i quattro sample, loop, ADSR,
   tastiera, rack per slot ed effetti master;
 - autosave JSON ripristinato all'avvio e gestione non bloccante dei sample mancanti;

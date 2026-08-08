@@ -26,6 +26,7 @@ public:
     void setDelay(bool enabled, float timeMs, float feedback, float mix);
     void setReverb(bool enabled, float size, float damping, float mix);
     void setStutter(bool enabled, float lengthMs, float mix, float feedback, int mode);
+    void setMaximumActiveGrains(int maximum);
 
 private:
     struct EqualizerParameters
@@ -119,8 +120,9 @@ private:
         int age = 0;
         int length = 1;
     };
-    // Four slot chains give a Pi-friendly maximum of 32 simultaneous grains.
+    // Storage stays fixed; each channel can use a lower share of the global ECO budget.
     static constexpr int maximumGrains = 8;
+    std::atomic<int> activeGrainLimit { maximumGrains };
     std::array<Grain, maximumGrains> grains;
     juce::AudioBuffer<float> granularBuffer;
     int granularWritePosition = 0;

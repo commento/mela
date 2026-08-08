@@ -37,6 +37,8 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - bypass e mix indipendenti per ogni effetto;
 - limiter master unico per proteggere il mix finale dal clipping;
 - pagina KEYS con tastiera multitouch a due ottave e otto voci polifoniche;
+- basso drone monofonico nella pagina KEYS, con due dente di sega anti-alias,
+  detune regolabile e cambio nota latchato dalla tastiera;
 - pagina SCENE con otto snapshot rinominabili: salva i quattro sample, loop, ADSR,
   tastiera, rack per slot ed effetti master;
 - autosave JSON ripristinato all'avvio e gestione non bloccante dei sample mancanti;

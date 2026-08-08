@@ -87,6 +87,14 @@ private:
         std::array<double, 3> reverb { 0.5, 0.5, 0.25 };
     };
 
+    struct DroneSettings
+    {
+        bool enabled = false;
+        int midiNote = 36;
+        double detuneCents = 7.0;
+        double gain = 0.25;
+    };
+
     void chooseFile();
     void loadFileIntoActiveSlot(const juce::File& file);
     void deleteActiveSample();
@@ -141,6 +149,7 @@ private:
     std::array<juce::File, LoopEngine::numberOfSlots> slotSourceFiles;
     std::array<bool, LoopEngine::numberOfSlots> slotSourceIsRecording {};
     MasterEffectSettings masterEffectSettings;
+    DroneSettings droneSettings;
     int effectTarget = 0;
 
     enum class HardwareTouchTarget
@@ -188,6 +197,11 @@ private:
     juce::Label keyDecayLabel;
     juce::Label keySustainLabel;
     juce::Label keyReleaseLabel;
+    juce::ToggleButton droneButton { "BASS DRONE" };
+    TouchSlider droneDetuneSlider;
+    TouchSlider droneGainSlider;
+    juce::Label droneDetuneLabel;
+    juce::Label droneGainLabel;
 
     TouchSlider speedSlider;
     TouchSlider pitchSlider;

@@ -247,6 +247,26 @@ void LoopEngine::allNotesOff(int slotIndex)
         pushNoteCommand({ NoteCommand::Type::allNotesForSlot, slotIndex, 0, 0.0f });
 }
 
+void LoopEngine::setDroneEnabled(bool enabled)
+{
+    droneEnabled.store(enabled);
+}
+
+void LoopEngine::setDroneNote(int midiNote)
+{
+    droneMidiNote.store(juce::jlimit(0, 127, midiNote));
+}
+
+void LoopEngine::setDroneDetune(float cents)
+{
+    droneDetuneCents.store(juce::jlimit(0.0f, 50.0f, cents));
+}
+
+void LoopEngine::setDroneGain(float gain)
+{
+    droneGain.store(juce::jlimit(0.0f, 0.7f, gain));
+}
+
 bool LoopEngine::startRecording(const juce::File& destination, juce::String& errorMessage)
 {
     return recorder.start(destination, deviceSampleRate,
@@ -433,6 +453,8 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         }
     }
 
+    renderDrone(mix, numSamples);
+
     masterEffects.processEqualizer(mix);
     masterEffects.processDelayReturn(delayBus);
     masterEffects.processReverbReturn(reverbBus);
@@ -448,6 +470,62 @@ void LoopEngine::audioDeviceIOCallbackWithContext(const float* const* inputChann
         if (outputChannelData[channel] != nullptr)
             juce::FloatVectorOperations::copy(outputChannelData[channel],
                                               mix.getReadPointer(channel), numSamples);
+}
+
+void LoopEngine::renderDrone(juce::AudioBuffer<float>& mix, int numSamples)
+{
+    const auto channels = mix.getNumChannels();
+    if (channels <= 0 || deviceSampleRate <= 0.0)
+        return;
+
+    const auto targetFrequency = juce::MidiMessage::getMidiNoteInHertz(
+        droneMidiNote.load());
+    const auto targetGain = droneEnabled.load() ? droneGain.load() : 0.0f;
+    const auto frequencySmoothing = 1.0 - std::exp(-1.0 / (0.025 * deviceSampleRate));
+    const auto gainSmoothing = static_cast<float>(
+        1.0 - std::exp(-1.0 / (0.012 * deviceSampleRate)));
+
+    const auto polyBlep = [](double phase, double increment)
+    {
+        if (phase < increment)
+        {
+            const auto t = phase / increment;
+            return t + t - t * t - 1.0;
+        }
+        if (phase > 1.0 - increment)
+        {
+            const auto t = (phase - 1.0) / increment;
+            return t * t + t + t + 1.0;
+        }
+        return 0.0;
+    };
+
+    for (int frame = 0; frame < numSamples; ++frame)
+    {
+        smoothedDroneFrequency += (targetFrequency - smoothedDroneFrequency)
+                                * frequencySmoothing;
+        smoothedDroneGain += (targetGain - smoothedDroneGain) * gainSmoothing;
+
+        const auto halfDetune = static_cast<double>(droneDetuneCents.load()) * 0.005;
+        const auto incrementA = juce::jmin(0.49, smoothedDroneFrequency
+            * std::pow(2.0, -halfDetune / 12.0) / deviceSampleRate);
+        const auto incrementB = juce::jmin(0.49, smoothedDroneFrequency
+            * std::pow(2.0, halfDetune / 12.0) / deviceSampleRate);
+        const auto sawA = 2.0 * dronePhaseA - 1.0 - polyBlep(dronePhaseA, incrementA);
+        const auto sawB = 2.0 * dronePhaseB - 1.0 - polyBlep(dronePhaseB, incrementB);
+        const auto sample = static_cast<float>((sawA + sawB) * 0.5)
+                          * smoothedDroneGain;
+
+        for (int channel = 0; channel < channels; ++channel)
+            mix.addSample(channel, frame, sample);
+
+        dronePhaseA += incrementA;
+        dronePhaseB += incrementB;
+        if (dronePhaseA >= 1.0)
+            dronePhaseA -= 1.0;
+        if (dronePhaseB >= 1.0)
+            dronePhaseB -= 1.0;
+    }
 }
 
 void LoopEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)

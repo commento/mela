@@ -202,12 +202,14 @@ MainComponent::MainComponent()
     sceneSaveButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
     sceneDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
 
-    for (auto* component : std::array<juce::Component*, 14> {
+    for (auto* component : std::array<juce::Component*, 19> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
              &rootNoteLabel,
              &instrumentModeLabel, &instrumentModeBox,
              &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider,
-             &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel })
+             &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel,
+             &droneButton, &droneDetuneSlider, &droneGainSlider,
+             &droneDetuneLabel, &droneGainLabel })
         addAndMakeVisible(component);
 
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
@@ -279,6 +281,9 @@ MainComponent::MainComponent()
     {
         touchKeyboard.releaseAll();
         engine.stopAll();
+        droneSettings.enabled = false;
+        droneButton.setToggleState(false, juce::dontSendNotification);
+        engine.setDroneEnabled(false);
     };
     loadButton.onClick = [this] { chooseFile(); };
     deleteSampleButton.onClick = [this] { deleteActiveSample(); };
@@ -357,6 +362,33 @@ MainComponent::MainComponent()
                   0.0, 1.0, 0.01, 1.0, "");
     configureKnob(keyReleaseSlider, keyReleaseLabel, "KEY RELEASE",
                   0.0, 10.0, 0.01, 0.15, " s");
+    configureKnob(droneDetuneSlider, droneDetuneLabel, "DETUNE",
+                  0.0, 50.0, 0.5, 7.0, " ct");
+    configureKnob(droneGainSlider, droneGainLabel, "DRONE VOL",
+                  0.0, 0.7, 0.01, 0.25, "");
+
+    droneButton.onClick = [this]
+    {
+        droneSettings.enabled = droneButton.getToggleState();
+        engine.setDroneNote(droneSettings.midiNote);
+        engine.setDroneEnabled(droneSettings.enabled);
+        if (droneSettings.enabled)
+            engine.allNotesOff(activeSlot);
+        statusLabel.setText(droneSettings.enabled
+                ? "DRONE ON | tocca un tasto per cambiare nota"
+                : "DRONE OFF | tastiera sample attiva",
+            juce::dontSendNotification);
+    };
+    droneDetuneSlider.onValueChange = [this]
+    {
+        droneSettings.detuneCents = droneDetuneSlider.getValue();
+        engine.setDroneDetune(static_cast<float>(droneSettings.detuneCents));
+    };
+    droneGainSlider.onValueChange = [this]
+    {
+        droneSettings.gain = droneGainSlider.getValue();
+        engine.setDroneGain(static_cast<float>(droneSettings.gain));
+    };
 
     speedSlider.onValueChange = [this]
     {
@@ -395,11 +427,21 @@ MainComponent::MainComponent()
 
     touchKeyboard.onNoteOn = [this](int midiNote, float velocity)
     {
-        engine.noteOn(activeSlot, midiNote, velocity);
+        if (droneSettings.enabled)
+        {
+            droneSettings.midiNote = midiNote;
+            engine.setDroneNote(midiNote);
+            statusLabel.setText("DRONE | " + juce::MidiMessage::getMidiNoteName(
+                                    midiNote, true, true, 4),
+                                juce::dontSendNotification);
+        }
+        else
+            engine.noteOn(activeSlot, midiNote, velocity);
     };
     touchKeyboard.onNoteOff = [this](int midiNote)
     {
-        engine.noteOff(activeSlot, midiNote);
+        if (! droneSettings.enabled)
+            engine.noteOff(activeSlot, midiNote);
     };
     octaveDownButton.onClick = [this]
     {
@@ -799,16 +841,19 @@ void MainComponent::resized()
         rootNoteLabel.setBounds(controls.removeFromLeft(190).reduced(4));
         instrumentModeLabel.setBounds(controls.removeFromLeft(80).reduced(2));
         instrumentModeBox.setBounds(controls.removeFromLeft(190).reduced(5, 12));
+        droneButton.setBounds(controls.removeFromLeft(180).reduced(8, 9));
         content.removeFromTop(8);
         auto envelopeArea = content.removeFromTop(120);
-        std::array<juce::Slider*, 4> keySliders {
-            &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider
+        std::array<juce::Slider*, 6> keySliders {
+            &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider,
+            &droneDetuneSlider, &droneGainSlider
         };
-        std::array<juce::Label*, 4> keyLabels {
-            &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel
+        std::array<juce::Label*, 6> keyLabels {
+            &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel,
+            &droneDetuneLabel, &droneGainLabel
         };
-        const auto keyControlWidth = envelopeArea.getWidth() / 4;
-        for (int index = 0; index < 4; ++index)
+        const auto keyControlWidth = envelopeArea.getWidth() / 6;
+        for (int index = 0; index < 6; ++index)
         {
             auto keyControl = envelopeArea.withTrimmedLeft(index * keyControlWidth)
                                           .withWidth(keyControlWidth).reduced(6, 0);
@@ -1739,12 +1784,14 @@ void MainComponent::showPage(Page pageToShow)
         updateWifiStatus();
     }
     clipName.setVisible(showLoop || showKeys);
-    for (auto* component : std::array<juce::Component*, 14> {
+    for (auto* component : std::array<juce::Component*, 19> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
              &rootNoteLabel,
              &instrumentModeLabel, &instrumentModeBox,
              &keyAttackSlider, &keyDecaySlider, &keySustainSlider, &keyReleaseSlider,
-             &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel })
+             &keyAttackLabel, &keyDecayLabel, &keySustainLabel, &keyReleaseLabel,
+             &droneButton, &droneDetuneSlider, &droneGainSlider,
+             &droneDetuneLabel, &droneGainLabel })
         component->setVisible(showKeys);
     for (auto& button : sampleButtons)
         button.setVisible(showLoop || showKeys);
@@ -1838,7 +1885,7 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     };
 
     auto root = new juce::DynamicObject();
-    root->setProperty("version", 3);
+    root->setProperty("version", 4);
     root->setProperty("name", sceneName);
     root->setProperty("activeSlot", activeSlot);
 
@@ -1893,6 +1940,13 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     master->setProperty("reverbEnabled", masterEffectSettings.reverbEnabled);
     master->setProperty("reverb", valuesToVar(masterEffectSettings.reverb));
     root->setProperty("master", juce::var(master));
+
+    auto drone = new juce::DynamicObject();
+    drone->setProperty("enabled", droneSettings.enabled);
+    drone->setProperty("midiNote", droneSettings.midiNote);
+    drone->setProperty("detuneCents", droneSettings.detuneCents);
+    drone->setProperty("gain", droneSettings.gain);
+    root->setProperty("drone", juce::var(drone));
     return juce::var(root);
 }
 
@@ -2031,10 +2085,26 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         readArray(master, "reverb", masterEffectSettings.reverb);
     }
 
+    if (auto* drone = root->getProperty("drone").getDynamicObject())
+    {
+        droneSettings.enabled = boolean(drone, "enabled", false);
+        droneSettings.midiNote = juce::jlimit(0, 127,
+            integer(drone, "midiNote", droneSettings.midiNote));
+        droneSettings.detuneCents = juce::jlimit(0.0, 50.0,
+            number(drone, "detuneCents", droneSettings.detuneCents));
+        droneSettings.gain = juce::jlimit(0.0, 0.7,
+            number(drone, "gain", droneSettings.gain));
+    }
+    else
+        droneSettings.enabled = false;
+
     applyAllSettingsToEngine();
     activeSlot = juce::jlimit(0, LoopEngine::numberOfSlots - 1,
                               integer(root, "activeSlot", 0));
     selectSlot(activeSlot);
+    droneButton.setToggleState(droneSettings.enabled, juce::dontSendNotification);
+    droneDetuneSlider.setValue(droneSettings.detuneCents, juce::dontSendNotification);
+    droneGainSlider.setValue(droneSettings.gain, juce::dontSendNotification);
     selectEffectTarget(juce::jlimit(0, LoopEngine::numberOfSlots, effectTarget));
     errorMessage = missingFiles > 0 ? loadWarnings.trimEnd() : juce::String {};
     return true;
@@ -2094,6 +2164,10 @@ void MainComponent::applyAllSettingsToEngine()
                      static_cast<float>(masterEffectSettings.reverb[0]),
                      static_cast<float>(masterEffectSettings.reverb[1]),
                      static_cast<float>(masterEffectSettings.reverb[2]));
+    engine.setDroneNote(droneSettings.midiNote);
+    engine.setDroneDetune(static_cast<float>(droneSettings.detuneCents));
+    engine.setDroneGain(static_cast<float>(droneSettings.gain));
+    engine.setDroneEnabled(droneSettings.enabled);
 }
 
 juce::File MainComponent::sceneFile(int sceneIndex) const

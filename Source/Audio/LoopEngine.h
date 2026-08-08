@@ -56,6 +56,10 @@ public:
     void noteOff(int slotIndex, int midiNote);
     void allNotesOff(int slotIndex);
     void allNotesOff();
+    void setDroneEnabled(bool enabled);
+    void setDroneNote(int midiNote);
+    void setDroneDetune(float cents);
+    void setDroneGain(float gain);
 
     bool startRecording(const juce::File& destination, juce::String& errorMessage);
     juce::File stopRecording();
@@ -196,6 +200,7 @@ private:
     void renderInstrumentVoice(InstrumentVoice& instrumentVoice,
                                float* const* outputs, int outputChannels, int numSamples);
     float advanceInstrumentEnvelope(InstrumentVoice& instrumentVoice);
+    void renderDrone(juce::AudioBuffer<float>& mix, int numSamples);
 
     juce::AudioFormatManager formatManager;
     std::array<Voice, numberOfSlots> voices;
@@ -222,6 +227,15 @@ private:
     juce::AudioBuffer<float> masterMixBuffer;
     juce::AudioBuffer<float> delaySendBuffer;
     juce::AudioBuffer<float> reverbSendBuffer;
+
+    std::atomic<bool> droneEnabled { false };
+    std::atomic<int> droneMidiNote { 36 };
+    std::atomic<float> droneDetuneCents { 7.0f };
+    std::atomic<float> droneGain { 0.25f };
+    double dronePhaseA = 0.0;
+    double dronePhaseB = 0.0;
+    double smoothedDroneFrequency = 65.406391;
+    float smoothedDroneGain = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoopEngine)
 };

@@ -170,6 +170,7 @@ private:
     enum class HardwareTouchTarget
     {
         none,
+        uiControl,
         waveform,
         keyboard,
         performance

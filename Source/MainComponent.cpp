@@ -675,7 +675,7 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
         if ((target == HardwareTouchTarget::waveform && ! waveform.isVisible())
             || (target == HardwareTouchTarget::keyboard && ! touchKeyboard.isVisible())
             || (target == HardwareTouchTarget::performance && ! performancePad.isVisible()))
-            target = HardwareTouchTarget::none;
+            target = HardwareTouchTarget::uiControl;
 
         if (target == HardwareTouchTarget::none)
         {
@@ -691,6 +691,12 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
                 if (performancePad.containsPadPosition(localPosition))
                     target = HardwareTouchTarget::performance;
             }
+
+            // A touch that begins on a normal JUCE control (knob, button, combo box)
+            // remains owned by that control until lift. It must not turn into a
+            // keyboard note merely because the finger drifts across the keys.
+            if (target == HardwareTouchTarget::none)
+                target = HardwareTouchTarget::uiControl;
         }
 
         if (target == HardwareTouchTarget::waveform)

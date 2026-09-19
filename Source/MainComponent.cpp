@@ -223,11 +223,19 @@ MainComponent::MainComponent()
         addAndMakeVisible(button);
     }
 
-    for (auto* panel : std::array<EffectPanel*, 6> {
+    for (auto* panel : std::array<EffectPanel*, 8> {
              &distortionPanel, &granularPanel, &flangerPanel,
-             &chorusPanel, &delayPanel, &reverbPanel })
+             &chorusPanel, &downsamplerPanel, &bitcrusherPanel, &delayPanel, &reverbPanel })
         addAndMakeVisible(panel);
     addAndMakeVisible(equalizerPanel);
+    addAndMakeVisible(effectsBankButton);
+    effectsBankButton.onClick = [this]
+    {
+        showLoFiEffects = ! showLoFiEffects;
+        effectsBankButton.setButtonText(showLoFiEffects ? "< INSERT" : "LO-FI >");
+        updateEffectPageVisibility();
+        resized();
+    };
 
     for (int target = 0; target <= masterEffectTarget; ++target)
     {
@@ -545,6 +553,14 @@ MainComponent::MainComponent()
         { "TONE", 800.0, 18000.0, 10.0, 12000.0, " Hz" },
         { "MIX", 0.0, 1.0, 0.01, 0.5, "" }
     });
+    downsamplerPanel.configure("DOWNSAMPLER", {
+        { "FACTOR", 1.0, 64.0, 0.1, 4.0, " x" },
+        { "MIX", 0.0, 1.0, 0.01, 0.5, "" }
+    });
+    bitcrusherPanel.configure("BITCRUSHER", {
+        { "BITS", 2.0, 16.0, 1.0, 8.0, " bit" },
+        { "MIX", 0.0, 1.0, 0.01, 0.5, "" }
+    });
     granularPanel.configure("GRANULARE", {
         { "SIZE", 10.0, 250.0, 1.0, 80.0, " ms" },
         { "DENSITY", 1.0, 40.0, 0.1, 12.0, " Hz" },
@@ -577,9 +593,9 @@ MainComponent::MainComponent()
                   0.0, 1.0, 0.01, 0.15, "");
     configureKnob(reverbSendSlider, reverbSendLabel, "REVERB SEND",
                   0.0, 1.0, 0.01, 0.15, "");
-    for (auto* panel : std::array<EffectPanel*, 6> {
+    for (auto* panel : std::array<EffectPanel*, 8> {
              &distortionPanel, &granularPanel, &flangerPanel,
-             &chorusPanel, &delayPanel, &reverbPanel })
+             &chorusPanel, &downsamplerPanel, &bitcrusherPanel, &delayPanel, &reverbPanel })
         panel->onChange = [this] { updateEffects(); };
     equalizerPanel.onChange = [this] { updateEffects(); };
     delaySendSlider.onValueChange = [this] { updateEffects(); };
@@ -974,6 +990,8 @@ void MainComponent::resized()
     {
         auto targetRow = content.removeFromTop(46);
         dspLoadLabel.setBounds(targetRow.removeFromRight(260).reduced(6, 2));
+        if (effectTarget != masterEffectTarget)
+            effectsBankButton.setBounds(targetRow.removeFromRight(150).reduced(5, 2));
         const auto targetWidth = targetRow.getWidth()
                                / static_cast<int>(effectTargetButtons.size());
         for (auto& button : effectTargetButtons)
@@ -993,14 +1011,23 @@ void MainComponent::resized()
             reverbSendLabel.setBounds(reverbArea.removeFromTop(25));
             reverbSendSlider.setBounds(reverbArea);
 
-            auto topRow = content.removeFromTop((content.getHeight() - 10) / 2);
-            content.removeFromTop(10);
-            const auto topWidth = topRow.getWidth() / 2;
-            distortionPanel.setBounds(topRow.removeFromLeft(topWidth).reduced(5));
-            granularPanel.setBounds(topRow.reduced(5));
-            const auto bottomWidth = content.getWidth() / 2;
-            flangerPanel.setBounds(content.removeFromLeft(bottomWidth).reduced(5));
-            chorusPanel.setBounds(content.reduced(5));
+            if (showLoFiEffects)
+            {
+                const auto width = content.getWidth() / 2;
+                downsamplerPanel.setBounds(content.removeFromLeft(width).reduced(5));
+                bitcrusherPanel.setBounds(content.reduced(5));
+            }
+            else
+            {
+                auto topRow = content.removeFromTop((content.getHeight() - 10) / 2);
+                content.removeFromTop(10);
+                const auto topWidth = topRow.getWidth() / 2;
+                distortionPanel.setBounds(topRow.removeFromLeft(topWidth).reduced(5));
+                granularPanel.setBounds(topRow.reduced(5));
+                const auto bottomWidth = content.getWidth() / 2;
+                flangerPanel.setBounds(content.removeFromLeft(bottomWidth).reduced(5));
+                chorusPanel.setBounds(content.reduced(5));
+            }
         }
         else
         {
@@ -1674,6 +1701,12 @@ void MainComponent::updateEffects()
         settings.distortionEnabled = distortionPanel.isEnabled();
         for (int index = 0; index < 3; ++index)
             settings.distortion[static_cast<size_t>(index)] = distortionPanel.value(index);
+        settings.downsamplerEnabled = downsamplerPanel.isEnabled();
+        for (int index = 0; index < 2; ++index)
+            settings.downsampler[static_cast<size_t>(index)] = downsamplerPanel.value(index);
+        settings.bitcrusherEnabled = bitcrusherPanel.isEnabled();
+        for (int index = 0; index < 2; ++index)
+            settings.bitcrusher[static_cast<size_t>(index)] = bitcrusherPanel.value(index);
         settings.granularEnabled = granularPanel.isEnabled();
         for (int index = 0; index < 5; ++index)
             settings.granular[static_cast<size_t>(index)] = granularPanel.value(index);
@@ -1696,6 +1729,12 @@ void MainComponent::updateEffects()
                 static_cast<float>(settings.distortion[0]),
                 static_cast<float>(settings.distortion[1]),
                 static_cast<float>(settings.distortion[2]));
+            engine.setDroneDownsampler(settings.downsamplerEnabled,
+                static_cast<float>(settings.downsampler[0]),
+                static_cast<float>(settings.downsampler[1]));
+            engine.setDroneBitcrusher(settings.bitcrusherEnabled,
+                static_cast<int>(settings.bitcrusher[0]),
+                static_cast<float>(settings.bitcrusher[1]));
             engine.setDroneGranular(settings.granularEnabled,
                 static_cast<float>(settings.granular[0]),
                 static_cast<float>(settings.granular[1]),
@@ -1724,6 +1763,12 @@ void MainComponent::updateEffects()
                 static_cast<float>(settings.distortion[0]),
                 static_cast<float>(settings.distortion[1]),
                 static_cast<float>(settings.distortion[2]));
+            engine.setDownsampler(effectTarget, settings.downsamplerEnabled,
+                static_cast<float>(settings.downsampler[0]),
+                static_cast<float>(settings.downsampler[1]));
+            engine.setBitcrusher(effectTarget, settings.bitcrusherEnabled,
+                static_cast<int>(settings.bitcrusher[0]),
+                static_cast<float>(settings.bitcrusher[1]));
             engine.setGranular(effectTarget, settings.granularEnabled,
                 static_cast<float>(settings.granular[0]),
                 static_cast<float>(settings.granular[1]),
@@ -1784,6 +1829,12 @@ void MainComponent::selectEffectTarget(int targetIndex)
         for (int index = 0; index < 3; ++index)
             equalizerPanel.setValue(index, settings.equalizer[static_cast<size_t>(index)]);
         distortionPanel.setEnabled(settings.distortionEnabled);
+        downsamplerPanel.setEnabled(settings.downsamplerEnabled);
+        for (int index = 0; index < 2; ++index)
+            downsamplerPanel.setValue(index, settings.downsampler[static_cast<size_t>(index)]);
+        bitcrusherPanel.setEnabled(settings.bitcrusherEnabled);
+        for (int index = 0; index < 2; ++index)
+            bitcrusherPanel.setValue(index, settings.bitcrusher[static_cast<size_t>(index)]);
         granularPanel.setEnabled(settings.granularEnabled);
         flangerPanel.setEnabled(settings.flangerEnabled);
         chorusPanel.setEnabled(settings.chorusEnabled);
@@ -1833,7 +1884,10 @@ void MainComponent::updateEffectPageVisibility()
     equalizerPanel.setVisible(showEffects);
     for (auto* panel : std::array<EffectPanel*, 4> {
              &distortionPanel, &granularPanel, &flangerPanel, &chorusPanel })
-        panel->setVisible(showSlot);
+        panel->setVisible(showSlot && ! showLoFiEffects);
+    effectsBankButton.setVisible(showSlot);
+    downsamplerPanel.setVisible(showSlot && showLoFiEffects);
+    bitcrusherPanel.setVisible(showSlot && showLoFiEffects);
     delayPanel.setVisible(showEffects && ! showSlot);
     reverbPanel.setVisible(showEffects && ! showSlot);
     for (auto* component : std::array<juce::Component*, 4> {
@@ -2165,6 +2219,10 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
         item->setProperty("equalizer", valuesToVar(effects.equalizer));
         item->setProperty("distortionEnabled", effects.distortionEnabled);
         item->setProperty("distortion", valuesToVar(effects.distortion));
+        item->setProperty("downsamplerEnabled", effects.downsamplerEnabled);
+        item->setProperty("downsampler", valuesToVar(effects.downsampler));
+        item->setProperty("bitcrusherEnabled", effects.bitcrusherEnabled);
+        item->setProperty("bitcrusher", valuesToVar(effects.bitcrusher));
         item->setProperty("granularEnabled", effects.granularEnabled);
         item->setProperty("granular", valuesToVar(effects.granular));
         item->setProperty("flangerEnabled", effects.flangerEnabled);
@@ -2200,6 +2258,10 @@ juce::var MainComponent::createSceneState(const juce::String& sceneName) const
     drone->setProperty("equalizer", valuesToVar(droneEffectSettings.equalizer));
     drone->setProperty("distortionEnabled", droneEffectSettings.distortionEnabled);
     drone->setProperty("distortion", valuesToVar(droneEffectSettings.distortion));
+    drone->setProperty("downsamplerEnabled", droneEffectSettings.downsamplerEnabled);
+    drone->setProperty("downsampler", valuesToVar(droneEffectSettings.downsampler));
+    drone->setProperty("bitcrusherEnabled", droneEffectSettings.bitcrusherEnabled);
+    drone->setProperty("bitcrusher", valuesToVar(droneEffectSettings.bitcrusher));
     drone->setProperty("granularEnabled", droneEffectSettings.granularEnabled);
     drone->setProperty("granular", valuesToVar(droneEffectSettings.granular));
     drone->setProperty("flangerEnabled", droneEffectSettings.flangerEnabled);
@@ -2307,6 +2369,12 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         effects.flangerEnabled = boolean(item, "flangerEnabled", false);
         effects.chorusEnabled = boolean(item, "chorusEnabled", false);
         readArray(item, "distortion", effects.distortion);
+        effects.downsamplerEnabled = boolean(item, "downsamplerEnabled", false);
+        effects.downsampler = { 4.0, 0.5 };
+        readArray(item, "downsampler", effects.downsampler);
+        effects.bitcrusherEnabled = boolean(item, "bitcrusherEnabled", false);
+        effects.bitcrusher = { 8.0, 0.5 };
+        readArray(item, "bitcrusher", effects.bitcrusher);
         readArray(item, "granular", effects.granular);
         readArray(item, "flanger", effects.flanger);
         readArray(item, "chorus", effects.chorus);
@@ -2382,6 +2450,12 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
         droneEffectSettings.chorusEnabled = boolean(
             drone, "chorusEnabled", false);
         readArray(drone, "distortion", droneEffectSettings.distortion);
+        droneEffectSettings.downsamplerEnabled = boolean(drone, "downsamplerEnabled", false);
+        droneEffectSettings.downsampler = { 4.0, 0.5 };
+        readArray(drone, "downsampler", droneEffectSettings.downsampler);
+        droneEffectSettings.bitcrusherEnabled = boolean(drone, "bitcrusherEnabled", false);
+        droneEffectSettings.bitcrusher = { 8.0, 0.5 };
+        readArray(drone, "bitcrusher", droneEffectSettings.bitcrusher);
         readArray(drone, "granular", droneEffectSettings.granular);
         readArray(drone, "flanger", droneEffectSettings.flanger);
         readArray(drone, "chorus", droneEffectSettings.chorus);
@@ -2391,7 +2465,10 @@ bool MainComponent::restoreSceneState(const juce::var& state, juce::String& erro
             drone, "reverbSend", droneEffectSettings.reverbSend);
     }
     else
+    {
         droneSettings = {};
+        droneEffectSettings = {};
+    }
 
     applyAllSettingsToEngine();
     activeSlot = juce::jlimit(0, LoopEngine::numberOfSlots - 1,
@@ -2437,6 +2514,12 @@ void MainComponent::applyAllSettingsToEngine()
         engine.setDistortion(slot, effects.distortionEnabled,
             static_cast<float>(effects.distortion[0]), static_cast<float>(effects.distortion[1]),
             static_cast<float>(effects.distortion[2]));
+        engine.setDownsampler(slot, effects.downsamplerEnabled,
+            static_cast<float>(effects.downsampler[0]),
+            static_cast<float>(effects.downsampler[1]));
+        engine.setBitcrusher(slot, effects.bitcrusherEnabled,
+            static_cast<int>(effects.bitcrusher[0]),
+            static_cast<float>(effects.bitcrusher[1]));
         engine.setGranular(slot, effects.granularEnabled,
             static_cast<float>(effects.granular[0]), static_cast<float>(effects.granular[1]),
             static_cast<float>(effects.granular[2]), static_cast<float>(effects.granular[3]),
@@ -2478,6 +2561,12 @@ void MainComponent::applyAllSettingsToEngine()
         static_cast<float>(droneEffectSettings.distortion[0]),
         static_cast<float>(droneEffectSettings.distortion[1]),
         static_cast<float>(droneEffectSettings.distortion[2]));
+    engine.setDroneDownsampler(droneEffectSettings.downsamplerEnabled,
+        static_cast<float>(droneEffectSettings.downsampler[0]),
+        static_cast<float>(droneEffectSettings.downsampler[1]));
+    engine.setDroneBitcrusher(droneEffectSettings.bitcrusherEnabled,
+        static_cast<int>(droneEffectSettings.bitcrusher[0]),
+        static_cast<float>(droneEffectSettings.bitcrusher[1]));
     engine.setDroneGranular(droneEffectSettings.granularEnabled,
         static_cast<float>(droneEffectSettings.granular[0]),
         static_cast<float>(droneEffectSettings.granular[1]),

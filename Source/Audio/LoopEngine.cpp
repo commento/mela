@@ -294,6 +294,16 @@ void LoopEngine::setDroneDistortion(bool enabled, float drive, float toneHz, flo
     droneEffects.setDistortion(enabled, drive, toneHz, mix);
 }
 
+void LoopEngine::setDroneDownsampler(bool enabled, float factor, float mix)
+{
+    droneEffects.setDownsampler(enabled, factor, mix);
+}
+
+void LoopEngine::setDroneBitcrusher(bool enabled, int bits, float mix)
+{
+    droneEffects.setBitcrusher(enabled, bits, mix);
+}
+
 void LoopEngine::setDroneGranular(bool enabled, float sizeMs, float densityHz,
                                   float positionMs, float pitchSemitones, float mix)
 {
@@ -358,6 +368,18 @@ void LoopEngine::setDistortion(int slotIndex, bool enabled,
     if (isValidSlot(slotIndex))
         slotEffects[static_cast<size_t>(slotIndex)].chain.setDistortion(
             enabled, drive, toneHz, mix);
+}
+
+void LoopEngine::setDownsampler(int slotIndex, bool enabled, float factor, float mix)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setDownsampler(enabled, factor, mix);
+}
+
+void LoopEngine::setBitcrusher(int slotIndex, bool enabled, int bits, float mix)
+{
+    if (isValidSlot(slotIndex))
+        slotEffects[static_cast<size_t>(slotIndex)].chain.setBitcrusher(enabled, bits, mix);
 }
 
 void LoopEngine::setGranular(int slotIndex, bool enabled, float sizeMs, float densityHz,

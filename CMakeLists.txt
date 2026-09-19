@@ -76,3 +76,23 @@ target_link_libraries(Mela PRIVATE
 )
 
 juce_generate_juce_header(Mela)
+
+option(MELA_BUILD_TESTS "Build the offline audio effect tests" OFF)
+if(MELA_BUILD_TESTS)
+    enable_testing()
+    juce_add_console_app(MelaEffectsTests PRODUCT_NAME "Mela Effects Tests")
+    target_sources(MelaEffectsTests PRIVATE
+        Tests/EffectsChainTests.cpp
+        Source/Audio/EffectsChain.cpp
+    )
+    target_include_directories(MelaEffectsTests PRIVATE Source)
+    target_compile_features(MelaEffectsTests PRIVATE cxx_std_17)
+    target_compile_definitions(MelaEffectsTests PRIVATE JUCE_USE_CURL=0)
+    target_link_libraries(MelaEffectsTests PRIVATE
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+    )
+    juce_generate_juce_header(MelaEffectsTests)
+    add_test(NAME EffectsChain COMMAND MelaEffectsTests)
+endif()

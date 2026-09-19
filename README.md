@@ -31,6 +31,7 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - pagina FX con rack insert indipendente per ciascuno dei quattro sample;
 - equalizzatore LOW/MID/HIGH indipendente per ogni sample e per il master;
 - Distorsione, Granulare, Flanger e Chorus configurabili separatamente per slot;
+- Downsampler e Bitcrusher indipendenti per S1-S4 e DRONE, accessibili da `FX > LO-FI`;
 - mandate Delay Send e Reverb Send per slot verso due effetti master condivisi;
 - selettori S1-S4, DRONE e MASTER, indicatore DSP/XRUN e limite ECO di 32 grani complessivi;
 - sintesi granulare real-time con Size, Density, Position, Pitch e Mix;
@@ -85,6 +86,29 @@ cmake --build build-pi --parallel 3
 Su Raspberry Pi 4 partire con 48 kHz e buffer da 256 campioni; provare 128 solo
 dopo avere verificato l'assenza di drop-out. Durante lo sviluppo su Pi 5 bisogna
 anche provare periodicamente una build limitata e tenere bassi CPU e animazioni.
+
+Il target di riferimento e' Raspberry Pi 4 Model B. In `FX`, selezionare S1-S4
+oppure DRONE e premere `LO-FI >` per accedere ai due nuovi insert:
+
+- `DOWNSAMPLER`: `FACTOR` da 1x a 64x (a 48 kHz, 4x equivale a 12 kHz),
+  con sample-and-hold e aliasing intenzionale;
+- `BITCRUSHER`: `BITS` da 2 a 16 per ridurre la risoluzione dell'ampiezza.
+
+Entrambi hanno ON/OFF e MIX indipendenti e sono salvati nelle scene e
+nell'autosave. Le scene precedenti li caricano spenti. Il pulsante `< INSERT`
+torna agli altri effetti; cambiare pagina non disattiva gli effetti attivi.
+L'ordine audio e' EQ, Distorsione, Downsampler, Bitcrusher, Granulare, Flanger,
+Chorus, poi le mandate master. I nuovi insert non allocano memoria nel callback
+audio e applicano una rampa di 20 ms al mix e al bypass.
+
+Per eseguire i test audio offline (anche sul Pi, sostituendo `build-mac` con
+`build-pi`):
+
+```sh
+cmake -S . -B build-mac -DMELA_BUILD_TESTS=ON
+cmake --build build-mac --parallel 3
+ctest --test-dir build-mac --output-on-failure
+```
 
 All'avvio aprire la pagina AUDIO, scegliere il microfono o l'ingresso della
 scheda USB e l'uscita desiderata, quindi premere `APRI I SAMPLE`. Nella pagina

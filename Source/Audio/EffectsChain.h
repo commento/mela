@@ -19,6 +19,8 @@ public:
 
     void setEqualizer(float lowDb, float midDb, float highDb);
     void setDistortion(bool enabled, float drive, float toneHz, float mix);
+    void setDownsampler(bool enabled, float factor, float mix);
+    void setBitcrusher(bool enabled, int bits, float mix);
     void setGranular(bool enabled, float sizeMs, float densityHz,
                      float positionMs, float pitchSemitones, float mix);
     void setFlanger(bool enabled, float rateHz, float depth, float feedback, float mix);
@@ -43,6 +45,20 @@ private:
         std::atomic<float> toneHz { 12000.0f };
         std::atomic<float> mix { 0.5f };
     } distortion;
+
+    struct DownsamplerParameters
+    {
+        std::atomic<bool> enabled { false };
+        std::atomic<float> factor { 4.0f };
+        std::atomic<float> mix { 0.5f };
+    } downsampler;
+
+    struct BitcrusherParameters
+    {
+        std::atomic<bool> enabled { false };
+        std::atomic<int> bits { 8 };
+        std::atomic<float> mix { 0.5f };
+    } bitcrusher;
 
     struct GranularParameters
     {
@@ -97,6 +113,8 @@ private:
     } stutter;
 
     void processDistortion(juce::AudioBuffer<float>& buffer);
+    void processDownsampler(juce::AudioBuffer<float>& buffer);
+    void processBitcrusher(juce::AudioBuffer<float>& buffer);
     void processGranular(juce::AudioBuffer<float>& buffer);
     void processFlanger(juce::AudioBuffer<float>& buffer);
     void processDelay(juce::AudioBuffer<float>& buffer, bool wetOnly);
@@ -104,6 +122,11 @@ private:
     double sampleRate = 44100.0;
     int preparedChannels = 2;
     std::array<float, 2> distortionToneState {};
+    std::array<float, 2> downsamplerHeldSamples {};
+    double downsamplerSamplesUntilCapture = 0.0;
+    juce::SmoothedValue<float> downsamplerFactor;
+    juce::SmoothedValue<float> downsamplerWetMix;
+    juce::SmoothedValue<float> bitcrusherWetMix;
     std::array<float, 2> equalizerLowState {};
     std::array<float, 2> equalizerHighState {};
     float equalizerLowCoefficient = 0.0f;

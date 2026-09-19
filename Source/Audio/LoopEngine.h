@@ -65,6 +65,8 @@ public:
     void setDroneWaveform(int waveform);
     void setDroneEqualizer(float lowDb, float midDb, float highDb);
     void setDroneDistortion(bool enabled, float drive, float toneHz, float mix);
+    void setDroneDownsampler(bool enabled, float factor, float mix);
+    void setDroneBitcrusher(bool enabled, int bits, float mix);
     void setDroneGranular(bool enabled, float sizeMs, float densityHz,
                           float positionMs, float pitchSemitones, float mix);
     void setDroneFlanger(bool enabled, float rateHz, float depth,
@@ -80,6 +82,8 @@ public:
 
     void setEqualizer(int slotIndex, float lowDb, float midDb, float highDb);
     void setDistortion(int slotIndex, bool enabled, float drive, float toneHz, float mix);
+    void setDownsampler(int slotIndex, bool enabled, float factor, float mix);
+    void setBitcrusher(int slotIndex, bool enabled, int bits, float mix);
     void setGranular(int slotIndex, bool enabled, float sizeMs, float densityHz,
                      float positionMs, float pitchSemitones, float mix);
     void setFlanger(int slotIndex, bool enabled, float rateHz, float depth,

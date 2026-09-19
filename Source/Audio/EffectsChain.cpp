@@ -43,6 +43,9 @@ void EffectsChain::prepare(double newSampleRate, int maximumBlockSize, int chann
     performanceFlangerDepth.reset(sampleRate, 0.025);
     performanceFlangerFeedback.reset(sampleRate, 0.025);
     smoothedDelaySamples.reset(sampleRate, 0.05);
+    downsamplerFactor.reset(sampleRate, 0.02);
+    downsamplerWetMix.reset(sampleRate, 0.02);
+    bitcrusherWetMix.reset(sampleRate, 0.02);
     smoothedDelaySamples.setCurrentAndTargetValue(sampleRate * 0.35);
     reset();
 }
@@ -58,6 +61,11 @@ void EffectsChain::reset()
     equalizerHighGain.setCurrentAndTargetValue(
         juce::Decibels::decibelsToGain(equalizer.highDb.load()));
     distortionToneState.fill(0.0f);
+    downsamplerHeldSamples.fill(0.0f);
+    downsamplerSamplesUntilCapture = 0.0;
+    downsamplerFactor.setCurrentAndTargetValue(downsampler.factor.load());
+    downsamplerWetMix.setCurrentAndTargetValue(0.0f);
+    bitcrusherWetMix.setCurrentAndTargetValue(0.0f);
     flangerFeedbackState.fill(0.0f);
     for (auto& grain : grains)
         grain = {};
@@ -121,6 +129,8 @@ void EffectsChain::processInserts(juce::AudioBuffer<float>& buffer)
 {
     processEqualizer(buffer);
     processDistortion(buffer);
+    processDownsampler(buffer);
+    processBitcrusher(buffer);
     processGranular(buffer);
     processFlanger(buffer);
 
@@ -508,6 +518,82 @@ void EffectsChain::processDistortion(juce::AudioBuffer<float>& buffer)
             samples[frame] = dry + mix * (state - dry);
         }
         distortionToneState[static_cast<size_t>(channel)] = state;
+    }
+}
+
+void EffectsChain::setDownsampler(bool enabled, float factor, float mix)
+{
+    downsampler.factor.store(juce::jlimit(1.0f, 64.0f, factor));
+    downsampler.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+    downsampler.enabled.store(enabled);
+}
+
+void EffectsChain::setBitcrusher(bool enabled, int bits, float mix)
+{
+    bitcrusher.bits.store(juce::jlimit(2, 16, bits));
+    bitcrusher.mix.store(juce::jlimit(0.0f, 1.0f, mix));
+    bitcrusher.enabled.store(enabled);
+}
+
+void EffectsChain::processDownsampler(juce::AudioBuffer<float>& buffer)
+{
+    const auto enabled = downsampler.enabled.load();
+    downsamplerFactor.setTargetValue(downsampler.factor.load());
+    downsamplerWetMix.setTargetValue(enabled ? downsampler.mix.load() : 0.0f);
+    if (! enabled && ! downsamplerWetMix.isSmoothing())
+    {
+        downsamplerSamplesUntilCapture = 0.0;
+        downsamplerHeldSamples.fill(0.0f);
+        downsamplerFactor.setCurrentAndTargetValue(downsampler.factor.load());
+        return;
+    }
+
+    const auto channels = juce::jmin(buffer.getNumChannels(), preparedChannels);
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto factor = downsamplerFactor.getNextValue();
+        const auto mix = downsamplerWetMix.getNextValue();
+        // Sample-and-hold deliberately retains aliasing for the lo-fi sound.
+        // One clock for both channels preserves stereo timing across blocks.
+        const auto capture = downsamplerSamplesUntilCapture <= 0.0 || factor <= 1.0f;
+        if (capture)
+            downsamplerSamplesUntilCapture = factor <= 1.0f
+                ? 1.0 : downsamplerSamplesUntilCapture + factor;
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            auto* samples = buffer.getWritePointer(channel);
+            const auto dry = samples[frame];
+            auto& held = downsamplerHeldSamples[static_cast<size_t>(channel)];
+            if (capture)
+                held = dry;
+            if (mix > 0.0f && factor > 1.0f)
+                samples[frame] = dry + mix * (held - dry);
+        }
+        downsamplerSamplesUntilCapture -= 1.0;
+    }
+}
+
+void EffectsChain::processBitcrusher(juce::AudioBuffer<float>& buffer)
+{
+    bitcrusherWetMix.setTargetValue(bitcrusher.enabled.load() ? bitcrusher.mix.load() : 0.0f);
+    if (! bitcrusherWetMix.isSmoothing() && bitcrusherWetMix.getCurrentValue() == 0.0f)
+        return;
+
+    const auto scale = static_cast<float>(1 << (bitcrusher.bits.load() - 1));
+    const auto channels = juce::jmin(buffer.getNumChannels(), preparedChannels);
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto mix = bitcrusherWetMix.getNextValue();
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            auto* samples = buffer.getWritePointer(channel);
+            const auto dry = samples[frame];
+            // Signed PCM quantisation: exactly 2^bits levels, including zero.
+            const auto wet = juce::jlimit(-scale, scale - 1.0f,
+                                         std::round(dry * scale)) / scale;
+            if (mix > 0.0f)
+                samples[frame] = dry + mix * (wet - dry);
+        }
     }
 }
 

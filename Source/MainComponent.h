@@ -68,6 +68,10 @@ private:
         std::array<double, 3> equalizer { 0.0, 0.0, 0.0 };
         bool distortionEnabled = false;
         std::array<double, 3> distortion { 2.0, 12000.0, 0.5 };
+        bool downsamplerEnabled = false;
+        std::array<double, 2> downsampler { 4.0, 0.5 };
+        bool bitcrusherEnabled = false;
+        std::array<double, 2> bitcrusher { 8.0, 0.5 };
         bool granularEnabled = false;
         std::array<double, 5> granular { 80.0, 12.0, 250.0, 0.0, 0.5 };
         bool flangerEnabled = false;
@@ -280,6 +284,10 @@ private:
     int autosaveTicks = 0;
     juce::String lastAutosaveState;
 
+    bool showLoFiEffects = false;
+    juce::TextButton effectsBankButton { "LO-FI >" };
+    EffectPanel downsamplerPanel;
+    EffectPanel bitcrusherPanel;
     EffectPanel distortionPanel;
     EffectPanel granularPanel;
     EffectPanel flangerPanel;

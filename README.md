@@ -52,9 +52,9 @@ Primo prototipo JUCE di un loop editor touch per Raspberry Pi 4/5 e macOS.
 - volume;
 - controlli grandi per display touch 1920×1200.
 - multitouch Linux diretto fino a 10 punti per pinch della waveform e tastiera polifonica.
-- skin cartoon originale anni '90 con palette ad alto contrasto, bordi illustrati e
-  font Luckiest Guy incorporato nell'eseguibile;
-- splash screen cartoon 1920×1200 coerente con la nuova interfaccia;
+- interfaccia monocromatica con sfondi neri, scritte bianche, stati in scala di grigi,
+  bordi sottili e font di sistema;
+- splash screen completamente nero, senza illustrazioni;
 - tasto `POWER` con conferma touch per salvare lo stato e spegnere o riavviare
   correttamente il Raspberry Pi.
 

@@ -52,10 +52,10 @@ void EqualizerPanel::setValue(int band, double newValue)
 void EqualizerPanel::paint(juce::Graphics& graphics)
 {
     const auto area = getLocalBounds().toFloat();
-    graphics.setColour(MelaColours::panel);
-    graphics.fillRoundedRectangle(area, 20.0f);
-    graphics.setColour(MelaColours::custard);
-    graphics.drawRoundedRectangle(area.reduced(2.25f), 20.0f, 4.5f);
+    graphics.setColour(MelaColours::surface);
+    graphics.fillRoundedRectangle(area, 6.0f);
+    graphics.setColour(MelaColours::border);
+    graphics.drawRoundedRectangle(area.reduced(2.25f), 6.0f, 1.0f);
 }
 
 void EqualizerPanel::resized()

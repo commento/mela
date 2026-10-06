@@ -13,20 +13,22 @@ public:
     {
         launchInKioskMode = ! commandLine.contains("--windowed");
 
-        const auto splashImage = juce::ImageFileFormat::loadFrom(
-            BinaryData::mela_splash_cartoon_png,
-            static_cast<size_t>(BinaryData::mela_splash_cartoon_pngSize));
-        if (splashImage.isValid())
-        {
-            // Do not create the interactive window underneath the splash. On
-            // touch-only X11 a gesture can otherwise be delivered to both
-            // top-level windows and activate a control hidden behind it.
-            splashScreen = std::make_unique<juce::SplashScreen>(
-                "Mela", splashImage, false);
-            startTimer(2500);
-        }
-        else
-            showMainWindow();
+        // An opaque, plain black splash needs no bundled artwork.
+        const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+        const auto splashBounds = launchInKioskMode && display != nullptr
+            ? display->logicalBounds.getSmallestIntegerContainer()
+            : juce::Rectangle<int>(0, 0, 1920, 1200);
+        juce::Image splashImage(juce::Image::RGB, splashBounds.getWidth(),
+                               splashBounds.getHeight(), true);
+        // Do not create the interactive window underneath the splash. On
+        // touch-only X11 a gesture can otherwise be delivered to both
+        // top-level windows and activate a control hidden behind it.
+        splashScreen = std::make_unique<juce::SplashScreen>(
+            juce::String(), splashImage, false);
+        if (launchInKioskMode)
+            splashScreen->setBounds(splashBounds);
+        splashScreen->setMouseCursor(juce::MouseCursor::NoCursor);
+        startTimer(2500);
     }
 
     void shutdown() override
@@ -56,7 +58,7 @@ private:
     {
         if (mainWindow == nullptr)
             mainWindow = std::make_unique<MainWindow>(
-                getApplicationName(), launchInKioskMode);
+                juce::String(), launchInKioskMode);
     }
 
     class MainWindow final : public juce::DocumentWindow,
@@ -65,7 +67,7 @@ private:
     public:
         MainWindow(const juce::String& name, bool useKioskMode)
             : DocumentWindow(name,
-                             MelaColours::aubergine,
+                             MelaColours::background,
                             #if JUCE_LINUX
                              useKioskMode ? 0 : DocumentWindow::allButtons)
                             #else

@@ -3,35 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mela Wi-Fi Upload</title>
+  <title>Wi-Fi Upload</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; background: #111419; color: #f5f7f9; }
+    body { margin: 0; background: #000000; color: #ffffff; }
     main { width: min(720px, calc(100% - 32px)); margin: 32px auto; }
-    h1 { color: #ffcf4a; margin-bottom: 4px; }
-    .card { background: #20252c; border-radius: 18px; padding: 20px; margin-top: 18px; }
-    input, button { min-height: 48px; border: 0; border-radius: 12px; font-size: 17px; }
-    input[type=password] { box-sizing: border-box; width: 100%; padding: 0 14px; background: #303740; color: white; }
+    h1 { color: #ffffff; margin-bottom: 4px; }
+    .card { background: #0c0c0c; border: 1px solid #606060; border-radius: 6px; padding: 20px; margin-top: 18px; }
+    input, button { min-height: 48px; border: 1px solid #606060; border-radius: 6px; font-size: 17px; }
+    input[type=password] { box-sizing: border-box; width: 100%; padding: 0 14px; background: #000000; color: white; }
     input[type=file] { width: 100%; margin: 16px 0; }
-    button { padding: 0 20px; background: #3b6f91; color: white; font-weight: 700; }
-    button.danger { min-height: 36px; background: #793b3b; font-size: 14px; }
+    button { padding: 0 20px; background: #242424; color: white; font-weight: 700; }
+    button.danger { min-height: 36px; background: #242424; font-size: 14px; }
+    button:hover, button:focus-visible, input:focus-visible { outline: 1px solid white; outline-offset: 2px; }
     button:disabled { opacity: .45; }
-    #drop { border: 2px dashed #66717f; padding: 26px; border-radius: 14px; text-align: center; }
-    #drop.over { border-color: #ffcf4a; background: #292d2a; }
-    progress { width: 100%; height: 18px; margin-top: 14px; }
+    #drop { border: 2px dashed #606060; padding: 26px; border-radius: 6px; text-align: center; }
+    #drop.over { border-color: #ffffff; background: #242424; }
+    progress { accent-color: white; width: 100%; height: 18px; margin-top: 14px; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #39404a; }
+    li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #606060; }
     .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    .size { color: #abb4bf; white-space: nowrap; }
-    #message { min-height: 24px; color: #ffcf4a; }
+    .size { color: #b3b3b3; white-space: nowrap; }
+    #message { min-height: 24px; color: #ffffff; }
   </style>
 </head>
 <body>
 <main>
-  <h1>MELA</h1>
-  <div>Invia sample al Raspberry Pi</div>
+  <h1>Invia sample</h1>
+  <div>Caricamento Wi-Fi</div>
   <section class="card">
-    <label for="pin">PIN mostrato nella pagina WIFI di Mela</label>
+    <label for="pin">PIN mostrato nella pagina WIFI del dispositivo</label>
     <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="000000">
   </section>
   <section class="card">

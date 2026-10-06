@@ -4,15 +4,13 @@
 
 namespace MelaColours
 {
-inline const juce::Colour ink       { 0xff35102f };
-inline const juce::Colour aubergine { 0xff3f163b };
-inline const juce::Colour panel     { 0xff5a2453 };
-inline const juce::Colour panelDark { 0xff2b1029 };
-inline const juce::Colour custard   { 0xffffd966 };
-inline const juce::Colour coral     { 0xffef796a };
-inline const juce::Colour sky       { 0xff79b8d8 };
-inline const juce::Colour cream     { 0xfffff2d4 };
-inline const juce::Colour green     { 0xff86c982 };
+inline const juce::Colour background { 0xff000000 };
+inline const juce::Colour surface    { 0xff0c0c0c };
+inline const juce::Colour active     { 0xff242424 };
+inline const juce::Colour selected   { 0xff383838 };
+inline const juce::Colour border     { 0xff606060 };
+inline const juce::Colour muted      { 0xffb3b3b3 };
+inline const juce::Colour text       { 0xffffffff };
 }
 
 class MelaLookAndFeel final : public juce::LookAndFeel_V4
@@ -38,6 +36,5 @@ public:
                           juce::Slider&) override;
 
 private:
-    juce::Font cartoonFont(float height) const;
-    juce::Typeface::Ptr cartoonTypeface;
+    juce::Font interfaceFont(float height) const;
 };

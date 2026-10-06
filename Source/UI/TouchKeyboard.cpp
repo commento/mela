@@ -72,14 +72,15 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
         const auto note = baseMidiNote + whiteOffsets[static_cast<size_t>(index)];
         const auto key = juce::Rectangle<float>(static_cast<float>(index) * whiteWidth, 0.0f,
                                                 whiteWidth, bounds.getHeight());
-        graphics.setColour(isNoteActive(note) ? MelaColours::custard
-                                              : MelaColours::cream);
-        graphics.fillRoundedRectangle(key.reduced(3.0f), 10.5f);
-        graphics.setColour(MelaColours::ink);
-        graphics.drawRoundedRectangle(key.reduced(3.0f), 10.5f, 3.75f);
+        graphics.setColour(isNoteActive(note) ? MelaColours::selected
+                                              : MelaColours::surface);
+        graphics.fillRoundedRectangle(key.reduced(3.0f), 4.0f);
+        graphics.setColour(isNoteActive(note) ? MelaColours::text : MelaColours::border);
+        graphics.drawRoundedRectangle(key.reduced(3.0f), 4.0f, 1.0f);
 
         if (note % 12 == 0)
         {
+            graphics.setColour(MelaColours::text);
             graphics.setFont(21.0f);
             graphics.drawText(juce::MidiMessage::getMidiNoteName(note, true, true, 4),
                               key.toNearestInt().removeFromBottom(42),
@@ -96,11 +97,11 @@ void TouchKeyboard::paint(juce::Graphics& graphics)
             blackBoundaries[static_cast<size_t>(index)]) * whiteWidth;
         const auto key = juce::Rectangle<float>(centre - blackWidth * 0.5f, 0.0f,
                                                 blackWidth, blackHeight);
-        graphics.setColour(isNoteActive(note) ? MelaColours::coral
-                                              : MelaColours::panelDark);
-        graphics.fillRoundedRectangle(key, 6.0f);
-        graphics.setColour(MelaColours::ink);
-        graphics.drawRoundedRectangle(key, 7.5f, 3.75f);
+        graphics.setColour(isNoteActive(note) ? MelaColours::selected
+                                              : MelaColours::background);
+        graphics.fillRoundedRectangle(key, 4.0f);
+        graphics.setColour(isNoteActive(note) ? MelaColours::text : MelaColours::border);
+        graphics.drawRoundedRectangle(key, 4.0f, 1.0f);
     }
 }
 

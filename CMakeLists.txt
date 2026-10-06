@@ -30,12 +30,6 @@ juce_add_gui_app(Mela
     MICROPHONE_PERMISSION_TEXT "Mela uses the microphone to record samples."
 )
 
-juce_add_binary_data(MelaAssets
-    SOURCES
-        Assets/mela_splash_cartoon.png
-        Assets/luckiest_guy_regular.ttf
-)
-
 target_sources(Mela PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
@@ -64,7 +58,6 @@ target_compile_definitions(Mela PRIVATE
 )
 
 target_link_libraries(Mela PRIVATE
-    MelaAssets
     signalsmith-stretch
     juce::juce_audio_devices
     juce::juce_audio_formats

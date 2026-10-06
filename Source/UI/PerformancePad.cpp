@@ -47,24 +47,21 @@ juce::Rectangle<float> PerformancePad::padBounds() const
 
 void PerformancePad::paint(juce::Graphics& graphics)
 {
-    graphics.setColour(MelaColours::panelDark);
-    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 22.0f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(2.0f), 22.0f, 4.0f);
+    graphics.setColour(MelaColours::background);
+    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 6.0f);
+    graphics.setColour(MelaColours::border);
+    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(2.0f), 6.0f, 1.0f);
 
-    graphics.setColour(MelaColours::cream);
+    graphics.setColour(MelaColours::text);
     graphics.setFont(juce::FontOptions(19.0f, juce::Font::bold));
     graphics.drawText("TIENI PREMUTO E MUOVI IL DITO", 28, 12, getWidth() - 56, 34,
                       juce::Justification::centredLeft);
 
     const auto pad = padBounds();
-    juce::ColourGradient field(MelaColours::sky.darker(0.55f), pad.getBottomLeft(),
-                               MelaColours::coral, pad.getTopRight(), false);
-    field.addColour(0.52, MelaColours::panel);
-    graphics.setGradientFill(field);
-    graphics.fillRoundedRectangle(pad, 24.0f);
+    graphics.setColour(MelaColours::background);
+    graphics.fillRoundedRectangle(pad, 6.0f);
 
-    graphics.setColour(MelaColours::cream.withAlpha(0.16f));
+    graphics.setColour(MelaColours::text.withAlpha(0.16f));
     for (int index = 1; index < 8; ++index)
     {
         const auto fraction = static_cast<float>(index) / 8.0f;
@@ -73,19 +70,16 @@ void PerformancePad::paint(juce::Graphics& graphics)
         graphics.drawHorizontalLine(juce::roundToInt(pad.getY() + fraction * pad.getHeight()),
                                     pad.getX() + 12.0f, pad.getRight() - 12.0f);
     }
-    graphics.setColour(touching ? MelaColours::custard : MelaColours::cream.withAlpha(0.65f));
-    graphics.drawRoundedRectangle(pad, 24.0f, touching ? 6.0f : 3.0f);
+    graphics.setColour(touching ? MelaColours::text : MelaColours::border);
+    graphics.drawRoundedRectangle(pad, 6.0f, touching ? 2.0f : 1.0f);
 
     const auto point = juce::Point<float>(pad.getX() + x * pad.getWidth(),
                                           pad.getBottom() - y * pad.getHeight());
-    graphics.setColour(MelaColours::ink.withAlpha(0.45f));
-    graphics.fillEllipse(point.x - 32.0f, point.y - 26.0f, 64.0f, 64.0f);
-    graphics.setColour(touching ? MelaColours::custard : MelaColours::cream);
-    graphics.fillEllipse(point.x - 28.0f, point.y - 32.0f, 56.0f, 56.0f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawEllipse(point.x - 28.0f, point.y - 32.0f, 56.0f, 56.0f, 4.0f);
+    graphics.setColour(touching ? MelaColours::text : MelaColours::muted);
+    graphics.drawEllipse(point.x - 18.0f, point.y - 18.0f, 36.0f, 36.0f, 2.0f);
+    graphics.fillEllipse(point.x - 4.0f, point.y - 4.0f, 8.0f, 8.0f);
 
-    graphics.setColour(MelaColours::cream.withAlpha(0.8f));
+    graphics.setColour(MelaColours::text.withAlpha(0.8f));
     graphics.setFont(juce::FontOptions(14.0f, juce::Font::bold));
     const auto xAxis = mode == Mode::filter ? "CUTOFF  BASSO  >  ALTO"
                      : mode == Mode::flanger ? "RATE  LENTO  >  VELOCE"
@@ -106,13 +100,13 @@ void PerformancePad::paint(juce::Graphics& graphics)
     auto side = getLocalBounds().reduced(18);
     side.removeFromTop(58);
     side = side.removeFromRight(245);
-    graphics.setColour(MelaColours::custard);
+    graphics.setColour(MelaColours::text);
     graphics.setFont(juce::FontOptions(17.0f, juce::Font::bold));
     graphics.drawText("CARATTERE", side.removeFromTop(28), juce::Justification::centredLeft);
     side.removeFromTop(274);
     graphics.drawText("TAGLI RAPIDI", side.removeFromTop(32), juce::Justification::centredLeft);
     side.removeFromTop(154);
-    graphics.setColour(MelaColours::cream);
+    graphics.setColour(MelaColours::text);
     graphics.setFont(juce::FontOptions(16.0f));
     juce::String readout;
     if (mode == Mode::filter)
@@ -232,7 +226,7 @@ void PerformancePad::updateButtonColours()
     for (int index = 0; index < static_cast<int>(modeButtons.size()); ++index)
         modeButtons[static_cast<size_t>(index)].setColour(
             juce::TextButton::buttonColourId,
-            static_cast<int>(mode) == index ? MelaColours::coral : MelaColours::panel);
+            static_cast<int>(mode) == index ? MelaColours::active : MelaColours::surface);
     for (auto& button : sliceButtons)
-        button.setColour(juce::TextButton::buttonColourId, MelaColours::panel);
+        button.setColour(juce::TextButton::buttonColourId, MelaColours::surface);
 }

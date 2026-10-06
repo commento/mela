@@ -2,7 +2,7 @@
 #include "MelaLookAndFeel.h"
 
 TouchSampleBrowser::TouchSampleBrowser()
-    : fileList("Sample nella Mela Inbox", this)
+    : fileList("Sample nella Inbox", this)
 {
     setOpaque(true);
     addAndMakeVisible(titleLabel);
@@ -11,32 +11,32 @@ TouchSampleBrowser::TouchSampleBrowser()
     addAndMakeVisible(cancelButton);
     addAndMakeVisible(loadButton);
 
-    titleLabel.setText("SCEGLI UN SAMPLE DALLA MELA INBOX", juce::dontSendNotification);
+    titleLabel.setText("SCEGLI UN SAMPLE DALLA INBOX", juce::dontSendNotification);
     titleLabel.setJustificationType(juce::Justification::centred);
     titleLabel.setFont(juce::FontOptions(28.0f, juce::Font::bold));
-    emptyLabel.setText("La Mela Inbox e' vuota", juce::dontSendNotification);
+    emptyLabel.setText("La Inbox e' vuota", juce::dontSendNotification);
     emptyLabel.setJustificationType(juce::Justification::centred);
     emptyLabel.setFont(juce::FontOptions(24.0f));
 
     fileList.setRowHeight(72);
     fileList.setMultipleSelectionEnabled(false);
-    fileList.setColour(juce::ListBox::backgroundColourId, MelaColours::panelDark);
-    fileList.setColour(juce::ListBox::outlineColourId, MelaColours::ink);
-    fileList.setOutlineThickness(4);
+    fileList.setColour(juce::ListBox::backgroundColourId, MelaColours::background);
+    fileList.setColour(juce::ListBox::outlineColourId, MelaColours::border);
+    fileList.setOutlineThickness(1);
     if (auto* viewport = fileList.getViewport())
     {
         viewport->setScrollBarThickness(58);
         viewport->setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
         auto& scrollBar = viewport->getVerticalScrollBar();
         scrollBar.setColour(juce::ScrollBar::backgroundColourId,
-                            MelaColours::panelDark);
+                            MelaColours::background);
         scrollBar.setColour(juce::ScrollBar::trackColourId,
-                            MelaColours::ink.withAlpha(0.55f));
+                            MelaColours::background.withAlpha(0.55f));
         scrollBar.setColour(juce::ScrollBar::thumbColourId,
-                            MelaColours::sky);
+                            MelaColours::muted);
     }
 
-    loadButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
+    loadButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
     cancelButton.onClick = [this]
     {
         setVisible(false);
@@ -64,12 +64,12 @@ void TouchSampleBrowser::showFiles(const std::vector<juce::File>& newFiles)
 
 void TouchSampleBrowser::paint(juce::Graphics& graphics)
 {
-    graphics.fillAll(MelaColours::aubergine);
+    graphics.fillAll(MelaColours::background);
     auto panel = getLocalBounds().toFloat().reduced(48.0f);
-    graphics.setColour(MelaColours::panel);
-    graphics.fillRoundedRectangle(panel, 26.0f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(panel, 26.0f, 5.0f);
+    graphics.setColour(MelaColours::surface);
+    graphics.fillRoundedRectangle(panel, 6.0f);
+    graphics.setColour(MelaColours::border);
+    graphics.drawRoundedRectangle(panel, 6.0f, 1.0f);
 }
 
 void TouchSampleBrowser::resized()
@@ -104,15 +104,15 @@ void TouchSampleBrowser::paintListBoxItem(int row, juce::Graphics& graphics,
     if (! juce::isPositiveAndBelow(row, static_cast<int>(files.size())))
         return;
 
-    graphics.fillAll(rowIsSelected ? MelaColours::coral : MelaColours::panelDark);
-    graphics.setColour(rowIsSelected ? MelaColours::ink : MelaColours::cream);
+    graphics.fillAll(rowIsSelected ? MelaColours::active : MelaColours::background);
+    graphics.setColour(MelaColours::text);
     graphics.setFont(juce::FontOptions(juce::jlimit(
                                            22.0f, 34.0f, static_cast<float>(height) * 0.38f),
                                        juce::Font::bold));
     graphics.drawText(files[static_cast<size_t>(row)].getFileName(),
                       juce::Rectangle<int>(24, 0, width - 48, height),
                       juce::Justification::centredLeft, true);
-    graphics.setColour(MelaColours::ink.withAlpha(0.65f));
+    graphics.setColour(MelaColours::border);
     graphics.drawHorizontalLine(height - 1, 12.0f, static_cast<float>(width - 12));
 }
 

@@ -2,49 +2,55 @@
 
 MelaLookAndFeel::MelaLookAndFeel()
 {
-    cartoonTypeface = juce::Typeface::createSystemTypefaceFor(
-        BinaryData::luckiest_guy_regular_ttf,
-        static_cast<size_t>(BinaryData::luckiest_guy_regular_ttfSize));
-
-    setColour(juce::TextButton::buttonColourId, MelaColours::panel);
-    setColour(juce::TextButton::buttonOnColourId, MelaColours::custard);
-    setColour(juce::TextButton::textColourOffId, MelaColours::cream);
-    setColour(juce::TextButton::textColourOnId, MelaColours::ink);
-    setColour(juce::ToggleButton::textColourId, MelaColours::cream);
-    setColour(juce::Label::textColourId, MelaColours::cream);
-    setColour(juce::ComboBox::backgroundColourId, MelaColours::panelDark);
-    setColour(juce::ComboBox::textColourId, MelaColours::cream);
-    setColour(juce::ComboBox::outlineColourId, MelaColours::ink);
-    setColour(juce::ComboBox::arrowColourId, MelaColours::custard);
-    setColour(juce::Slider::textBoxTextColourId, MelaColours::cream);
-    setColour(juce::Slider::textBoxBackgroundColourId, MelaColours::panelDark);
+    setColourScheme(juce::LookAndFeel_V4::ColourScheme(
+        MelaColours::background, MelaColours::surface, MelaColours::border,
+        MelaColours::text, MelaColours::border, MelaColours::background,
+        MelaColours::text, MelaColours::selected, MelaColours::text));
+    setColour(juce::TextButton::buttonColourId, MelaColours::background);
+    setColour(juce::TextButton::buttonOnColourId, MelaColours::selected);
+    setColour(juce::TextButton::textColourOffId, MelaColours::text);
+    setColour(juce::TextButton::textColourOnId, MelaColours::text);
+    setColour(juce::ToggleButton::textColourId, MelaColours::text);
+    setColour(juce::Label::textColourId, MelaColours::text);
+    setColour(juce::ComboBox::backgroundColourId, MelaColours::background);
+    setColour(juce::ComboBox::textColourId, MelaColours::text);
+    setColour(juce::ComboBox::outlineColourId, MelaColours::border);
+    setColour(juce::ComboBox::arrowColourId, MelaColours::text);
+    setColour(juce::Slider::textBoxTextColourId, MelaColours::text);
+    setColour(juce::Slider::textBoxBackgroundColourId, MelaColours::background);
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    setColour(juce::PopupMenu::backgroundColourId, MelaColours::panelDark);
-    setColour(juce::PopupMenu::textColourId, MelaColours::cream);
-    setColour(juce::PopupMenu::highlightedBackgroundColourId, MelaColours::coral);
-    setColour(juce::PopupMenu::highlightedTextColourId, MelaColours::ink);
+    setColour(juce::PopupMenu::backgroundColourId, MelaColours::background);
+    setColour(juce::PopupMenu::textColourId, MelaColours::text);
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, MelaColours::selected);
+    setColour(juce::PopupMenu::highlightedTextColourId, MelaColours::text);
+    setColour(juce::TextEditor::backgroundColourId, MelaColours::background);
+    setColour(juce::TextEditor::textColourId, MelaColours::text);
+    setColour(juce::TextEditor::outlineColourId, MelaColours::border);
+    setColour(juce::TextEditor::focusedOutlineColourId, MelaColours::text);
+    setColour(juce::TextEditor::highlightColourId, MelaColours::selected);
+    setColour(juce::TextEditor::highlightedTextColourId, MelaColours::text);
+    setColour(juce::CaretComponent::caretColourId, MelaColours::text);
 }
 
-juce::Font MelaLookAndFeel::cartoonFont(float height) const
+juce::Font MelaLookAndFeel::interfaceFont(float height) const
 {
-    return juce::Font(juce::FontOptions(cartoonTypeface).withHeight(height))
-        .withExtraKerningFactor(0.035f);
+    return juce::Font(juce::FontOptions(height));
 }
 
 juce::Font MelaLookAndFeel::getTextButtonFont(juce::TextButton&, int buttonHeight)
 {
-    return cartoonFont(juce::jmin(30.0f, static_cast<float>(buttonHeight) * 0.42f));
+    return interfaceFont(juce::jmin(27.0f, static_cast<float>(buttonHeight) * 0.40f));
 }
 
 juce::Font MelaLookAndFeel::getLabelFont(juce::Label& label)
 {
-    const auto requested = label.getFont().getHeight();
-    return cartoonFont(juce::jlimit(19.5f, 39.0f, requested * 1.5f));
+    return label.getFont().withHeight(juce::jlimit(19.5f, 36.0f,
+                                                  label.getFont().getHeight() * 1.5f));
 }
 
 juce::Font MelaLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 {
-    return cartoonFont(juce::jmin(28.5f, static_cast<float>(box.getHeight()) * 0.42f));
+    return interfaceFont(juce::jmin(27.0f, static_cast<float>(box.getHeight()) * 0.40f));
 }
 
 juce::PopupMenu::Options MelaLookAndFeel::getOptionsForComboBoxPopupMenu(
@@ -52,9 +58,7 @@ juce::PopupMenu::Options MelaLookAndFeel::getOptionsForComboBoxPopupMenu(
 {
     auto options = juce::LookAndFeel_V4::getOptionsForComboBoxPopupMenu(box, label);
    #if JUCE_LINUX
-    // On Raspberry Pi/X11 a temporary popup window can leave stale pixels after
-    // it closes. Keeping the popup inside Mela's main window makes JUCE repaint
-    // the uncovered area as part of the normal component hierarchy.
+    // Keep popups inside the main window to avoid stale pixels on touch-only X11.
     if (auto* topLevel = box.getTopLevelComponent())
         options = options.withParentComponent(topLevel);
    #endif
@@ -66,88 +70,76 @@ void MelaLookAndFeel::drawButtonBackground(juce::Graphics& graphics,
                                            const juce::Colour& background,
                                            bool highlighted, bool down)
 {
-    auto area = button.getLocalBounds().toFloat().reduced(4.5f);
-    if (down)
-        area = area.translated(0.0f, 3.0f);
-
-    const auto fill = down ? background.darker(0.12f)
-                           : highlighted ? background.brighter(0.10f) : background;
-    graphics.setColour(MelaColours::ink.withAlpha(0.65f));
-    graphics.fillRoundedRectangle(area.translated(0.0f, 4.5f), 16.5f);
-    graphics.setColour(fill);
-    graphics.fillRoundedRectangle(area, 16.5f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(area, 16.5f, 4.5f);
+    const auto area = button.getLocalBounds().toFloat().reduced(4.5f);
+    const auto selected = button.getToggleState() || background.getBrightness()
+                                                   >= MelaColours::active.getBrightness();
+    const auto fill = down ? MelaColours::selected
+                          : highlighted ? background.brighter(0.08f) : background;
+    const auto opacity = button.isEnabled() ? 1.0f : 0.4f;
+    graphics.setColour(fill.withAlpha(opacity));
+    graphics.fillRoundedRectangle(area, 6.0f);
+    graphics.setColour((selected || highlighted || button.hasKeyboardFocus(true)
+                            ? MelaColours::text : MelaColours::border).withAlpha(opacity));
+    graphics.drawRoundedRectangle(area, 6.0f, selected ? 2.0f : 1.0f);
 }
 
 void MelaLookAndFeel::drawToggleButton(juce::Graphics& graphics,
                                        juce::ToggleButton& button,
                                        bool highlighted, bool down)
 {
-    auto area = button.getLocalBounds().toFloat().reduced(4.5f);
-    auto fill = button.getToggleState() ? MelaColours::custard : MelaColours::panelDark;
-    if (highlighted)
-        fill = fill.brighter(0.08f);
-    if (down)
-        area = area.translated(0.0f, 3.0f);
-
-    graphics.setColour(MelaColours::ink.withAlpha(0.65f));
-    graphics.fillRoundedRectangle(area.translated(0.0f, 4.5f), 16.5f);
-    graphics.setColour(fill);
-    graphics.fillRoundedRectangle(area, 16.5f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(area, 16.5f, 4.5f);
-    graphics.setColour(button.getToggleState() ? MelaColours::ink : MelaColours::cream);
-    graphics.setFont(cartoonFont(juce::jmin(27.0f, area.getHeight() * 0.40f)));
+    const auto area = button.getLocalBounds().toFloat().reduced(4.5f);
+    drawButtonBackground(graphics, button,
+                         button.getToggleState() ? MelaColours::selected
+                                                 : MelaColours::background,
+                         highlighted, down);
+    graphics.setColour(MelaColours::text.withAlpha(button.isEnabled() ? 1.0f : 0.4f));
+    graphics.setFont(interfaceFont(juce::jmin(25.5f, area.getHeight() * 0.40f)));
     graphics.drawText(button.getButtonText(), area.toNearestInt().reduced(12, 3),
                       juce::Justification::centred);
 }
 
 void MelaLookAndFeel::drawComboBox(juce::Graphics& graphics, int width, int height,
-                                   bool down, int, int, int, int, juce::ComboBox&)
+                                   bool down, int, int, int, int, juce::ComboBox& box)
 {
-    auto area = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width),
-                                       static_cast<float>(height)).reduced(3.0f);
-    graphics.setColour(down ? MelaColours::panel : MelaColours::panelDark);
-    graphics.fillRoundedRectangle(area, 15.0f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(area, 15.0f, 4.5f);
+    const auto area = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width),
+                                            static_cast<float>(height)).reduced(3.0f);
+    graphics.setColour(down ? MelaColours::active : MelaColours::background);
+    graphics.fillRoundedRectangle(area, 6.0f);
+    graphics.setColour(box.hasKeyboardFocus(true) ? MelaColours::text : MelaColours::border);
+    graphics.drawRoundedRectangle(area, 6.0f, 1.0f);
 
     const auto centreX = area.getRight() - 27.0f;
     const auto centreY = area.getCentreY();
     juce::Path arrow;
-    arrow.startNewSubPath(centreX - 9.0f, centreY - 4.5f);
-    arrow.lineTo(centreX, centreY + 6.0f);
-    arrow.lineTo(centreX + 9.0f, centreY - 4.5f);
-    graphics.setColour(MelaColours::custard);
-    graphics.strokePath(arrow, juce::PathStrokeType(4.5f,
-                        juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    arrow.startNewSubPath(centreX - 7.0f, centreY - 3.5f);
+    arrow.lineTo(centreX, centreY + 3.5f);
+    arrow.lineTo(centreX + 7.0f, centreY - 3.5f);
+    graphics.setColour(MelaColours::text.withAlpha(box.isEnabled() ? 1.0f : 0.4f));
+    graphics.strokePath(arrow, juce::PathStrokeType(1.5f));
 }
 
 void MelaLookAndFeel::drawRotarySlider(juce::Graphics& graphics, int x, int y,
                                        int width, int height, float position,
-                                       float startAngle, float endAngle, juce::Slider&)
+                                       float startAngle, float endAngle, juce::Slider& slider)
 {
-    const auto size = static_cast<float>(juce::jmin(width, height)) - 21.0f;
-    const auto centre = juce::Point<float>(static_cast<float>(x)
-                                               + static_cast<float>(width) * 0.5f,
-                                           static_cast<float>(y)
-                                               + static_cast<float>(height) * 0.5f);
+    const auto size = juce::jmax(0.0f, static_cast<float>(juce::jmin(width, height)) - 21.0f);
+    const auto centre = juce::Point<float>(static_cast<float>(x) + static_cast<float>(width) * 0.5f,
+                                          static_cast<float>(y) + static_cast<float>(height) * 0.5f);
     const auto radius = size * 0.5f;
     const auto angle = startAngle + position * (endAngle - startAngle);
+    const auto opacity = slider.isEnabled() ? 1.0f : 0.4f;
 
-    graphics.setColour(MelaColours::ink.withAlpha(0.65f));
-    graphics.fillEllipse(centre.x - radius, centre.y - radius + 6.0f, size, size);
-    graphics.setColour(MelaColours::sky);
+    graphics.setColour(MelaColours::background);
     graphics.fillEllipse(centre.x - radius, centre.y - radius, size, size);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawEllipse(centre.x - radius, centre.y - radius, size, size, 6.0f);
+    graphics.setColour(MelaColours::border.withAlpha(opacity));
+    graphics.drawEllipse(centre.x - radius, centre.y - radius, size, size, 1.0f);
 
+    juce::Path arc;
+    arc.addCentredArc(centre.x, centre.y, radius, radius, 0.0f, startAngle, angle, true);
+    graphics.setColour(MelaColours::text.withAlpha(opacity));
+    graphics.strokePath(arc, juce::PathStrokeType(2.0f));
     juce::Path pointer;
-    pointer.addRoundedRectangle(-5.25f, -radius + 12.0f, 10.5f, radius * 0.58f, 4.5f);
-    graphics.setColour(MelaColours::custard);
+    pointer.addRoundedRectangle(-1.5f, -radius + 7.0f, 3.0f, radius * 0.5f, 1.5f);
     graphics.fillPath(pointer, juce::AffineTransform::rotation(angle)
                                   .translated(centre.x, centre.y));
-    graphics.setColour(MelaColours::ink);
-    graphics.fillEllipse(centre.x - 7.5f, centre.y - 7.5f, 15.0f, 15.0f);
 }

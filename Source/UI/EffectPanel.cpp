@@ -69,11 +69,11 @@ void EffectPanel::setValue(int parameterIndex, double newValue)
 
 void EffectPanel::paint(juce::Graphics& graphics)
 {
-    const auto colour = isEnabled() ? MelaColours::panel : MelaColours::panelDark;
+    const auto colour = isEnabled() ? MelaColours::surface : MelaColours::background;
     graphics.setColour(colour);
-    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 24.0f);
-    graphics.setColour(isEnabled() ? MelaColours::custard : MelaColours::ink);
-    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(2.25f), 24.0f, 4.5f);
+    graphics.fillRoundedRectangle(getLocalBounds().toFloat(), 6.0f);
+    graphics.setColour(isEnabled() ? MelaColours::text : MelaColours::border);
+    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(2.25f), 6.0f, 1.0f);
 }
 
 void EffectPanel::resized()

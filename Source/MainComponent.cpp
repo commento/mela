@@ -103,7 +103,7 @@ MainComponent::MainComponent()
     wifiFileBox.setTextWhenNothingSelected("Nessun sample nella Inbox");
     wifiFileBox.setTextWhenNoChoicesAvailable("Nessun sample nella Inbox");
     wifiLibraryRefreshButton.onClick = [this] { refreshWifiLibrary(true); };
-    wifiDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    wifiDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
     wifiDeleteButton.onClick = [this] { deleteSelectedWifiSample(); };
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {
@@ -121,7 +121,7 @@ MainComponent::MainComponent()
              &wifiShiftButton, &wifiRefreshButton, &wifiConnectButton })
         addAndMakeVisible(component);
     wifiInfoLabel.setText(
-        "Connetti Mela alla rete Wi-Fi di casa. Quando compare CONNESSO, "
+        "Connetti il dispositivo alla rete Wi-Fi di casa. Quando compare CONNESSO, "
         "il Raspberry Pi puo' essere raggiunto con Pi Connect.",
         juce::dontSendNotification);
     wifiInfoLabel.setJustificationType(juce::Justification::centred);
@@ -136,7 +136,7 @@ MainComponent::MainComponent()
     wifiPasswordLabel.setJustificationType(juce::Justification::centredLeft);
     wifiPasswordEditor.setPasswordCharacter(0x2022);
     wifiPasswordEditor.setTextToShowWhenEmpty("Password della rete di casa",
-                                               MelaColours::ink.withAlpha(0.45f));
+                                               MelaColours::muted);
     wifiShowPasswordButton.onClick = [this]
     {
         wifiPasswordEditor.setPasswordCharacter(
@@ -180,7 +180,7 @@ MainComponent::MainComponent()
     wifiShiftButton.onClick = [this] { updateWifiKeyboardLabels(); };
     updateWifiKeyboardLabels();
     wifiRefreshButton.onClick = [this] { refreshWifiNetworks(true); };
-    wifiConnectButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
+    wifiConnectButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
     wifiConnectButton.onClick = [this] { connectSelectedWifiNetwork(); };
 
     scenesDirectory = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
@@ -201,8 +201,8 @@ MainComponent::MainComponent()
     sceneSaveButton.onClick = [this] { saveSelectedScene(true); };
     sceneRenameButton.onClick = [this] { renameSelectedScene(); };
     sceneDeleteButton.onClick = [this] { deleteSelectedScene(); };
-    sceneSaveButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
-    sceneDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    sceneSaveButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
+    sceneDeleteButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
 
     for (auto* component : std::array<juce::Component*, 22> {
              &touchKeyboard, &octaveDownButton, &octaveUpButton,
@@ -275,12 +275,12 @@ MainComponent::MainComponent()
     clipName.setJustificationType(juce::Justification::centredLeft);
     clipName.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
-    playButton.setColour(juce::TextButton::buttonColourId, MelaColours::green);
-    stopButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
-    stopAllButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral.darker(0.15f));
-    recordButton.setColour(juce::TextButton::buttonColourId, MelaColours::coral);
+    playButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
+    stopButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
+    stopAllButton.setColour(juce::TextButton::buttonColourId, MelaColours::active.darker(0.15f));
+    recordButton.setColour(juce::TextButton::buttonColourId, MelaColours::active);
     deleteSampleButton.setColour(juce::TextButton::buttonColourId,
-                                 MelaColours::coral.darker(0.18f));
+                                 MelaColours::active.darker(0.18f));
     playButton.onClick = [this] { engine.play(activeSlot); };
     stopButton.onClick = [this]
     {
@@ -310,7 +310,7 @@ MainComponent::MainComponent()
     performancePageButton.onClick = [this] { showPage(Page::performance); };
     scenesPageButton.onClick = [this] { showPage(Page::scenes); };
     powerButton.setColour(juce::TextButton::buttonColourId,
-                          MelaColours::coral.darker(0.18f));
+                          MelaColours::active.darker(0.18f));
     powerButton.onClick = [this] { showPowerDialog(); };
     continueButton.onClick = [this] { showPage(Page::loop); };
 
@@ -730,35 +730,33 @@ void MainComponent::handleHardwareTouches(const LinuxMultiTouchInput::Snapshot& 
 
 void MainComponent::paint(juce::Graphics& graphics)
 {
-    graphics.fillAll(MelaColours::aubergine);
+    graphics.fillAll(MelaColours::background);
 
     const auto scaleX = static_cast<float>(getWidth()) / static_cast<float>(designWidth);
     const auto scaleY = static_cast<float>(getHeight()) / static_cast<float>(designHeight);
     juce::Graphics::ScopedSaveState savedState(graphics);
     graphics.addTransform(juce::AffineTransform::scale(scaleX, scaleY));
 
-    graphics.setColour(MelaColours::custard);
+    graphics.setColour(MelaColours::text);
     graphics.setFont(melaLookAndFeel.getTextButtonFont(audioPageButton, 64)
                          .withHeight(30.0f));
-    const auto title = currentPage == Page::audio ? "MELA - AUDIO SETUP"
-                     : currentPage == Page::wifi ? "MELA - WIFI LIBRARY"
-                     : currentPage == Page::network ? "MELA - WIFI DI CASA"
-                     : currentPage == Page::loop ? "MELA - 4 LOOP EDITOR"
-                     : currentPage == Page::keys ? "MELA - SAMPLE KEYS"
-                     : currentPage == Page::effects ? "MELA - EFFETTI"
-                     : currentPage == Page::performance ? "MELA - XY LIVE"
-                                                    : "MELA - SCENE";
+    const auto title = currentPage == Page::audio ? "AUDIO SETUP"
+                     : currentPage == Page::wifi ? "WIFI LIBRARY"
+                     : currentPage == Page::network ? "WIFI DI CASA"
+                     : currentPage == Page::loop ? "4 LOOP EDITOR"
+                     : currentPage == Page::keys ? "SAMPLE KEYS"
+                     : currentPage == Page::effects ? "EFFETTI"
+                     : currentPage == Page::performance ? "XY LIVE"
+                                                    : "SCENE";
     graphics.drawText(title,
                       24, 12, 410, 42, juce::Justification::centredLeft);
     const auto panel = juce::Rectangle<int>(0, 0, designWidth, designHeight)
                            .reduced(24).withTrimmedTop(60)
                            .withTrimmedBottom(82).toFloat();
-    graphics.setColour(MelaColours::ink.withAlpha(0.55f));
-    graphics.fillRoundedRectangle(panel.translated(0.0f, 5.0f), 20.0f);
-    graphics.setColour(MelaColours::panel);
-    graphics.fillRoundedRectangle(panel, 20.0f);
-    graphics.setColour(MelaColours::ink);
-    graphics.drawRoundedRectangle(panel, 20.0f, 3.0f);
+    graphics.setColour(MelaColours::surface);
+    graphics.fillRoundedRectangle(panel, 6.0f);
+    graphics.setColour(MelaColours::border);
+    graphics.drawRoundedRectangle(panel, 6.0f, 1.0f);
 }
 
 void MainComponent::resized()
@@ -1305,9 +1303,9 @@ void MainComponent::refreshWifiLibrary(bool announceResult)
                              .getChildFile(".config/mela/upload-pin.txt");
     const auto pin = pinFile.existsAsFile() ? pinFile.loadFileAsString().trim() : juce::String {};
     wifiPinLabel.setText(pin.length() == 6 ? "PIN:  " + pin
-                                           : "PIN: servizio mela-upload non ancora avviato",
+                                           : "PIN: servizio upload non ancora avviato",
                          juce::dontSendNotification);
-    wifiInboxLabel.setText("MELA INBOX - " + juce::String(wifiFiles.size())
+    wifiInboxLabel.setText("INBOX - " + juce::String(wifiFiles.size())
                                + " sample - " + wifiInboxDirectory.getFullPathName(),
                            juce::dontSendNotification);
 
@@ -1363,7 +1361,7 @@ void MainComponent::deleteSelectedWifiSample()
         juce::MessageBoxIconType::WarningIcon,
         "Elimina sample",
         "Eliminare definitivamente \"" + file.getFileName()
-            + "\" dalla Mela Inbox?\nUn sample gia' caricato continuera' a suonare fino alla chiusura.",
+            + "\" dalla Inbox?\nUn sample gia' caricato continuera' a suonare fino alla chiusura.",
         "ELIMINA", "ANNULLA", this,
         juce::ModalCallbackFunction::create([safeThis, file](int result)
         {
@@ -1424,7 +1422,7 @@ void MainComponent::showPowerDialog()
 
     auto* dialog = new juce::AlertWindow(
         "Alimentazione",
-        "Mela salvera' lo stato e fermera' l'audio prima di continuare.",
+        "Il dispositivo salvera' lo stato e fermera' l'audio prima di continuare.",
         juce::MessageBoxIconType::WarningIcon);
     dialog->addButton("SPEGNI", 1);
     dialog->addButton("RIAVVIA", 2);
@@ -1667,12 +1665,12 @@ void MainComponent::timerCallback()
     const auto cpuPercent = juce::roundToInt(deviceManager.getCpuUsage() * 100.0);
     const auto xRuns = deviceManager.getXRunCount();
     dspLoadLabel.setText("DSP " + juce::String(cpuPercent) + "% | XRUN "
-                             + juce::String(xRuns) + " | ECO 32G",
+                             + juce::String(xRuns) + " | ECO 32G"
+                             + (cpuPercent >= 85 ? " | CARICO CRITICO"
+                                : cpuPercent >= 65 ? " | CARICO ALTO" : ""),
                          juce::dontSendNotification);
     dspLoadLabel.setColour(juce::Label::textColourId,
-        cpuPercent >= 85 ? juce::Colour(0xffff6565)
-                         : cpuPercent >= 65 ? juce::Colour(0xffffcf4a)
-                                            : juce::Colour(0xff8de3b5));
+        MelaColours::text);
 }
 
 void MainComponent::updateEnvelope()
@@ -1868,8 +1866,8 @@ void MainComponent::selectEffectTarget(int targetIndex)
     for (int target = 0; target <= masterEffectTarget; ++target)
         effectTargetButtons[static_cast<size_t>(target)].setColour(
             juce::TextButton::buttonColourId,
-            target == effectTarget ? MelaColours::sky
-                                   : MelaColours::panelDark);
+            target == effectTarget ? MelaColours::active
+                                   : MelaColours::background);
     updateEffectPageVisibility();
     resized();
 }
@@ -2087,22 +2085,22 @@ void MainComponent::showPage(Page pageToShow)
     stopButton.setVisible(showTransport);
     stopAllButton.setVisible(showTransport);
     audioPageButton.setColour(juce::TextButton::buttonColourId,
-        showAudio ? MelaColours::sky : MelaColours::panelDark);
+        showAudio ? MelaColours::active : MelaColours::background);
     wifiPageButton.setColour(juce::TextButton::buttonColourId,
-        showWifi ? MelaColours::sky : MelaColours::panelDark);
+        showWifi ? MelaColours::active : MelaColours::background);
     networkPageButton.setColour(juce::TextButton::buttonColourId,
-        showNetwork ? MelaColours::sky : MelaColours::panelDark);
+        showNetwork ? MelaColours::active : MelaColours::background);
     loopPageButton.setColour(juce::TextButton::buttonColourId,
-        showLoop ? MelaColours::sky : MelaColours::panelDark);
+        showLoop ? MelaColours::active : MelaColours::background);
     keysPageButton.setColour(juce::TextButton::buttonColourId,
-        showKeys ? MelaColours::sky : MelaColours::panelDark);
+        showKeys ? MelaColours::active : MelaColours::background);
     effectsPageButton.setColour(juce::TextButton::buttonColourId,
-        currentPage == Page::effects ? MelaColours::sky
-                                     : MelaColours::panelDark);
+        currentPage == Page::effects ? MelaColours::active
+                                     : MelaColours::background);
     performancePageButton.setColour(juce::TextButton::buttonColourId,
-        showPerformance ? MelaColours::coral : MelaColours::panelDark);
+        showPerformance ? MelaColours::active : MelaColours::background);
     scenesPageButton.setColour(juce::TextButton::buttonColourId,
-        showScenes ? MelaColours::sky : MelaColours::panelDark);
+        showScenes ? MelaColours::active : MelaColours::background);
     resized();
     repaint();
 }
@@ -2150,25 +2148,24 @@ void MainComponent::updateSlotButtonColours()
 {
     for (int slot = 0; slot < LoopEngine::numberOfSlots; ++slot)
     {
-        auto colour = engine.hasClip(slot) ? MelaColours::green.darker(0.18f)
-                                           : MelaColours::panelDark;
+        auto colour = engine.hasClip(slot) ? MelaColours::active.darker(0.18f)
+                                           : MelaColours::background;
         if (engine.isPlaying(slot))
-            colour = MelaColours::green;
+            colour = MelaColours::active;
         if (slot == activeSlot && ! (currentPage == Page::keys && droneKeysSelected))
-            colour = MelaColours::custard;
+            colour = MelaColours::selected;
         sampleButtons[static_cast<size_t>(slot)].setColour(
             juce::TextButton::buttonColourId, colour);
         sampleButtons[static_cast<size_t>(slot)].setColour(
             juce::TextButton::textColourOffId,
-            slot == activeSlot && ! (currentPage == Page::keys && droneKeysSelected)
-                ? MelaColours::ink : MelaColours::cream);
+            MelaColours::text);
     }
     droneKeysButton.setColour(juce::TextButton::buttonColourId,
-        droneKeysSelected ? MelaColours::custard
-                          : droneSettings.enabled ? MelaColours::green.darker(0.18f)
-                                                  : MelaColours::panelDark);
+        droneKeysSelected ? MelaColours::selected
+                          : droneSettings.enabled ? MelaColours::active.darker(0.18f)
+                                                  : MelaColours::background);
     droneKeysButton.setColour(juce::TextButton::textColourOffId,
-        droneKeysSelected ? MelaColours::ink : MelaColours::cream);
+        MelaColours::text);
 }
 
 juce::var MainComponent::createSceneState(const juce::String& sceneName) const
@@ -2736,12 +2733,12 @@ void MainComponent::refreshSceneButtons()
         auto& button = sceneButtons[static_cast<size_t>(scene)];
         button.setButtonText(name);
         button.setColour(juce::TextButton::buttonColourId,
-                         scene == selectedScene ? MelaColours::custard
+                         scene == selectedScene ? MelaColours::selected
                                                 : file.existsAsFile()
-                                                    ? MelaColours::green.darker(0.18f)
-                                                    : MelaColours::panelDark);
+                                                    ? MelaColours::active.darker(0.18f)
+                                                    : MelaColours::background);
         button.setColour(juce::TextButton::textColourOffId,
-                         scene == selectedScene ? MelaColours::ink : MelaColours::cream);
+                         MelaColours::text);
     }
     const auto exists = sceneFile(selectedScene).existsAsFile();
     sceneRecallButton.setEnabled(exists);
